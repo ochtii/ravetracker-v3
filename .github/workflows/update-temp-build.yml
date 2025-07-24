@@ -18,6 +18,12 @@ jobs:
       - name: 📥 Checkout code
         uses: actions/checkout@v4
         
+      - name: 🟢 Setup Node.js (if needed)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+        
       - name: 🔄 Update temp_build on server
         uses: appleboy/ssh-action@v1.0.0
         with:
