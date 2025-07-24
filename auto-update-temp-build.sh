@@ -113,11 +113,28 @@ validate_update() {
 main() {
     log "🎬 Starting auto-update process..."
     
+    # Pre-flight checks
+    log "🔍 Running pre-flight checks..."
+    
+    # Check if git is available
+    if ! command -v git &> /dev/null; then
+        log "❌ Git is not installed on this system"
+        exit 1
+    fi
+    
+    # Check internet connectivity
+    if ! ping -c 1 github.com &> /dev/null; then
+        log "⚠️ Warning: Cannot reach github.com - check internet connectivity"
+    fi
+    
     # Change to project directory
     cd "$PROJECT_DIR" || {
         log "❌ Failed to access project directory: $PROJECT_DIR"
+        log "💡 Tip: Create directory with: sudo mkdir -p $PROJECT_DIR && sudo chown \$USER:\$USER $PROJECT_DIR"
         exit 1
     }
+    
+    log "✅ Pre-flight checks passed"
     
     # Create backup of existing temp_build
     create_backup
