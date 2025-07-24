@@ -86,6 +86,17 @@ else
     echo "⚠️ health-check.sh not found, skipping..."
 fi
 
+# Copy ecosystem config to release root if it exists
+if [ -f "$RELEASE_PATH/ecosystem.config.cjs" ]; then
+    cp "$RELEASE_PATH/ecosystem.config.cjs" "$RELEASE_PATH/"
+    echo "✅ ecosystem.config.cjs copied to release"
+elif [ -f "$RELEASE_PATH/ecosystem.config.example.js" ]; then
+    cp "$RELEASE_PATH/ecosystem.config.example.js" "$RELEASE_PATH/ecosystem.config.js"
+    echo "✅ ecosystem.config.js copied to release"
+else
+    echo "⚠️ No ecosystem config found, will use direct PM2 start"
+fi
+
 echo "🔗 Creating symlinks to shared resources..."
 # Link shared directories
 ln -nfs "$SHARED_PATH/logs" "$RELEASE_PATH/logs"
@@ -103,10 +114,22 @@ cd "$CURRENT_PATH"
 # Check if PM2 process exists
 if pm2 describe ravetracker-v3 > /dev/null 2>&1; then
     echo "♻️ Reloading existing PM2 process..."
-    pm2 reload ravetracker-v3 --env production
+    pm2 reload ravetracker-v3
 else
     echo "🆕 Starting new PM2 process..."
-    pm2 start ecosystem.config.js --env production
+    
+    # Direct PM2 start is more reliable than ecosystem config with ES modules
+    echo "📋 Starting directly with build/index.js"
+    
+    # Ensure logs directory exists
+    mkdir -p logs
+    
+    NODE_ENV=production PORT=3000 pm2 start build/index.js \
+        --name ravetracker-v3 \
+        --log-date-format="YYYY-MM-DD HH:mm:ss Z" \
+        --merge-logs \
+        --output ./logs/out.log \
+        --error ./logs/error.log
 fi
 
 # Save PM2 configuration
@@ -158,7 +181,15 @@ else
     if [ -n "$PREVIOUS_RELEASE" ]; then
         echo "🔄 Rolling back to: $PREVIOUS_RELEASE"
         ln -nfs "$RELEASES_PATH/$PREVIOUS_RELEASE" "$CURRENT_PATH"
-        pm2 reload ravetracker-v3 --env production
+        
+        # Stop current process and restart with previous release
+        pm2 delete ravetracker-v3 2>/dev/null || true
+        cd "$CURRENT_PATH"
+        NODE_ENV=production PORT=3000 pm2 start build/index.js \
+            --name ravetracker-v3 \
+            --log-date-format="YYYY-MM-DD HH:mm:ss Z" \
+            --merge-logs
+        
         echo "↩️ Rollback completed"
     fi
     

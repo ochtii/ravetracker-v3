@@ -6,7 +6,7 @@
 // 2. Passe server-spezifische Werte an
 // 3. ecosystem.config.production.js wird von .gitignore ignoriert
 
-module.exports = {
+export default {
   apps: [
     {
       // App Configuration
