@@ -1,9 +1,15 @@
-name: Deploy to Production
+name: Smart Deploy
 
 on:
   push:
     branches: [ main ]
-  workflow_dispatch:  # Manual trigger
+  workflow_dispatch:
+    inputs:
+      force_full_deploy:
+        description: 'Force full deployment (ignore incremental updates)'
+        required: false
+        default: 'false'
+        type: boolean
 
 jobs:
   deploy:
@@ -12,6 +18,8 @@ jobs:
     steps:
       - name: 📥 Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 2  # Fetch previous commit for comparison
         
       - name: 🟢 Setup Node.js
         uses: actions/setup-node@v4
@@ -20,61 +28,54 @@ jobs:
           cache: 'npm'
           
       - name: 📦 Install dependencies
-        run: npm install
+        run: npm ci
+        
+      - name: 🔍 Check for changes
+        id: changes
+        run: |
+          # Get changed files between current and previous commit
+          CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD)
+          echo "Changed files:"
+          echo "$CHANGED_FILES"
+          
+          # Check if package.json or package-lock.json changed
+          DEPS_CHANGED=$(echo "$CHANGED_FILES" | grep -E "package(-lock)?\.json" || true)
+          
+          # Check if build-relevant files changed
+          BUILD_CHANGED=$(echo "$CHANGED_FILES" | grep -E "\.(js|ts|svelte|css|scss|json|html)$|vite\.config|svelte\.config|tailwind\.config" || true)
+          
+          # Set outputs for conditional steps
+          echo "deps_changed=$([[ -n "$DEPS_CHANGED" ]] && echo "true" || echo "false")" >> $GITHUB_OUTPUT
+          echo "build_needed=$([[ -n "$BUILD_CHANGED" ]] && echo "true" || echo "false")" >> $GITHUB_OUTPUT
+          echo "changed_files<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGED_FILES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
         
       - name: 🏗️ Build application
+        if: steps.changes.outputs.build_needed == 'true' || github.event.inputs.force_full_deploy == 'true'
         run: npm run build
         
-      - name: 🔍 Run tests (if available)
-        run: npm run test --if-present
-        
-      - name: 🚀 Deploy to production server
-        uses: appleboy/ssh-action@v1.0.0
-        with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: "22"
-          timeout: 60s
-          command_timeout: 600s
-          script: |
-            echo "🚀 Starting deployment on $(hostname)..."
-            cd /var/www/ravetracker-v3
-            
-            # First update temp_build automatically
-            echo "🔄 Auto-updating temp_build..."
-            if [ -f "auto-update-temp-build.sh" ]; then
-              chmod +x auto-update-temp-build.sh
-              ./auto-update-temp-build.sh
-            else
-              echo "⚠️ auto-update-temp-build.sh not found, skipping temp_build update"
-            fi
-            
-            # Make sure deploy script is executable
-            chmod +x deploy.sh
-            
-            # Run deployment
-            ./deploy.sh
-            
-            echo "✅ Deployment completed!"
-            
-      - name: 🔍 Health check
+      - name: 🚀 Deploy to server
         uses: appleboy/ssh-action@v1.0.0
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 22
+          timeout: 300s
           script: |
-            cd /var/www/ravetracker-v3
-            chmod +x health-check.sh
-            ./health-check.sh
+            export FORCE_DEPLOY="${{ github.event.inputs.force_full_deploy }}"
+            export DEPS_CHANGED="${{ steps.changes.outputs.deps_changed }}"
+            export BUILD_NEEDED="${{ steps.changes.outputs.build_needed }}"
+            export COMMIT_SHA="${{ github.sha }}"
+            export COMMIT_MESSAGE="${{ github.event.head_commit.message }}"
             
-      - name: 📢 Notify deployment status
-        if: always()
+            # Run the smart deploy script
+            cd /var/www/ravetracker-v3
+            ./smart-deploy.sh
+            
+      - name: 🎉 Deployment completed
         run: |
-          if [ "${{ job.status }}" == "success" ]; then
-            echo "✅ Deployment successful!"
-          else
-            echo "❌ Deployment failed!"
-          fi
+          echo "✅ Deployment completed successfully!"
+          echo "📝 Changes deployed:"
+          echo "${{ steps.changes.outputs.changed_files }}"
