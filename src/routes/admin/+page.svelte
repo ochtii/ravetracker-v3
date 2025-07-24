@@ -102,7 +102,7 @@ Main admin dashboard with overview statistics and quick actions
 		// Get total events
 		const { data: eventsData, error: eventsError } = await supabase
 			.from('events')
-			.select('id, status, created_at, start_date')
+			.select('id, status, created_at, date_time')
 
 		if (eventsError) throw eventsError
 
