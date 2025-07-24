@@ -1,0 +1,384 @@
+name: Fix NGINX Permission Issues
+
+on:
+  workflow_dispatch:
+    inputs:
+      fix_type:
+        description: 'Fix Type'
+        required: true
+        default: 'permissions'
+        type: choice
+        options:
+        - permissions
+        - restart-service
+        - full-reset
+        - alternative-config
+
+jobs:
+  diagnose-nginx:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Diagnose NGINX Permission Issues
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.HOST }}
+        username: ${{ secrets.USERNAME }}
+        key: ${{ secrets.SSH_KEY }}
+        port: ${{ secrets.PORT || '22' }}
+        timeout: 120s
+        command_timeout: 60s
+        script: |
+          echo "🔍 NGINX Permission Diagnosis"
+          echo "============================="
+          echo "📅 $(date)"
+          echo "👤 User: $(whoami)"
+          echo ""
+          
+          # Check NGINX process status
+          echo "🔍 NGINX Process Status:"
+          ps aux | grep nginx | grep -v grep || echo "No NGINX processes found"
+          echo ""
+          
+          # Check NGINX service status
+          echo "📊 NGINX Service Status:"
+          systemctl status nginx --no-pager -l || echo "Cannot check service status without sudo"
+          echo ""
+          
+          # Check PID file permissions
+          echo "🔒 PID File Status:"
+          ls -la /run/nginx.pid 2>/dev/null || echo "PID file does not exist"
+          ls -la /run/ | grep nginx || echo "No nginx files in /run/"
+          echo ""
+          
+          # Check NGINX configuration files
+          echo "📄 NGINX Configuration:"
+          ls -la /etc/nginx/sites-enabled/ 2>/dev/null || echo "Cannot access sites-enabled"
+          ls -la /etc/nginx/sites-available/ravetracker-v3 2>/dev/null || echo "Cannot access ravetracker-v3 config"
+          echo ""
+          
+          # Check if NGINX binary exists and permissions
+          echo "🔧 NGINX Binary:"
+          which nginx || echo "nginx not found in PATH"
+          nginx -v 2>&1 || echo "Cannot run nginx command"
+          echo ""
+          
+          # Check listening ports
+          echo "📡 Listening Ports:"
+          netstat -tlnp 2>/dev/null | grep :80 || ss -tlnp 2>/dev/null | grep :80 || echo "Port 80 not listening"
+          echo ""
+          
+          # Create diagnosis summary
+          echo "📋 Diagnosis Summary:"
+          echo "===================="
+          echo "❌ NGINX cannot access /run/nginx.pid (Permission denied)"
+          echo "💡 This usually means:"
+          echo "   1. NGINX was started incorrectly"
+          echo "   2. Permission issues with /run directory"
+          echo "   3. NGINX service needs restart as root"
+          echo "   4. Configuration issues"
+
+  fix-permissions:
+    runs-on: ubuntu-latest
+    needs: [diagnose-nginx]
+    if: github.event.inputs.fix_type == 'permissions' || github.event.inputs.fix_type == 'full-reset'
+    
+    steps:
+    - name: Create Permission Fix Scripts
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.HOST }}
+        username: ${{ secrets.USERNAME }}
+        key: ${{ secrets.SSH_KEY }}
+        port: ${{ secrets.PORT || '22' }}
+        timeout: 90s
+        command_timeout: 45s
+        script: |
+          echo "🔧 Creating NGINX Permission Fix Scripts"
+          echo "========================================"
+          
+          # Create comprehensive fix script
+          cat > ~/fix_nginx_permissions.sh << 'EOF'
+          #!/bin/bash
+          
+          echo "🔧 NGINX Permission Fix Script"
+          echo "=============================="
+          echo "📅 $(date)"
+          
+          # Stop any running nginx processes
+          echo "🛑 Stopping NGINX processes..."
+          sudo pkill nginx 2>/dev/null || echo "No nginx processes to kill"
+          sleep 2
+          
+          # Remove stale PID file
+          echo "🗑️ Removing stale PID files..."
+          sudo rm -f /run/nginx.pid
+          sudo rm -f /var/run/nginx.pid
+          
+          # Check and fix /run directory permissions
+          echo "🔒 Checking /run directory permissions..."
+          sudo ls -la /run/ | head -5
+          
+          # Start NGINX service properly
+          echo "🚀 Starting NGINX service..."
+          sudo systemctl stop nginx 2>/dev/null
+          sleep 1
+          sudo systemctl start nginx
+          
+          # Check if it started successfully
+          sleep 2
+          if sudo systemctl is-active --quiet nginx; then
+            echo "✅ NGINX started successfully"
+            
+            # Show status
+            sudo systemctl status nginx --no-pager -l
+            
+            # Check PID file
+            if [ -f /run/nginx.pid ]; then
+              echo "✅ PID file created: $(cat /run/nginx.pid)"
+            else
+              echo "⚠️ PID file not found"
+            fi
+            
+          else
+            echo "❌ NGINX failed to start"
+            echo "📄 Error details:"
+            sudo systemctl status nginx --no-pager -l
+            sudo journalctl -u nginx --no-pager -l -n 20
+          fi
+          
+          # Test configuration
+          echo ""
+          echo "🧪 Testing NGINX configuration..."
+          if sudo nginx -t; then
+            echo "✅ Configuration is valid"
+          else
+            echo "❌ Configuration has errors"
+          fi
+          
+          # Check listening ports
+          echo ""
+          echo "📡 Checking ports..."
+          sudo netstat -tlnp | grep :80 || sudo ss -tlnp | grep :80 || echo "Port 80 not listening"
+          
+          echo ""
+          echo "🎯 Fix completed!"
+          EOF
+          
+          chmod +x ~/fix_nginx_permissions.sh
+          echo "✅ Permission fix script created: ~/fix_nginx_permissions.sh"
+          
+          # Create alternative configuration without PID issues
+          cat > ~/nginx_alternative.conf << 'EOF'
+          # Alternative NGINX configuration for RaveTracker v3.0
+          # This config avoids common permission issues
+          
+          user www-data;
+          worker_processes auto;
+          
+          events {
+              worker_connections 768;
+          }
+          
+          http {
+              include /etc/nginx/mime.types;
+              default_type application/octet-stream;
+              
+              # Logging
+              access_log /var/log/nginx/access.log;
+              error_log /var/log/nginx/error.log;
+              
+              # Basic settings
+              sendfile on;
+              tcp_nopush on;
+              tcp_nodelay on;
+              keepalive_timeout 65;
+              types_hash_max_size 2048;
+              server_tokens off;
+              
+              # Gzip
+              gzip on;
+              gzip_vary on;
+              gzip_types text/plain text/css application/json application/javascript text/xml application/xml;
+              
+              # RaveTracker Server Block
+              server {
+                  listen 80 default_server;
+                  listen [::]:80 default_server;
+                  
+                  server_name _;
+                  root /var/www/ravetracker-v3/temp_build;
+                  index index.html index.htm;
+                  
+                  # Main location
+                  location / {
+                      try_files $uri $uri/ @app;
+                  }
+                  
+                  # Application proxy
+                  location @app {
+                      proxy_pass http://127.0.0.1:3000;
+                      proxy_http_version 1.1;
+                      proxy_set_header Upgrade $http_upgrade;
+                      proxy_set_header Connection 'upgrade';
+                      proxy_set_header Host $host;
+                      proxy_set_header X-Real-IP $remote_addr;
+                      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                      proxy_set_header X-Forwarded-Proto $scheme;
+                      proxy_cache_bypass $http_upgrade;
+                      
+                      proxy_connect_timeout 5s;
+                      proxy_send_timeout 5s;
+                      proxy_read_timeout 5s;
+                  }
+                  
+                  # Static assets
+                  location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
+                      expires 1y;
+                      add_header Cache-Control "public, max-age=31536000";
+                      access_log off;
+                  }
+                  
+                  # Health check
+                  location /health {
+                      access_log off;
+                      return 200 "RaveTracker v3.0 - Healthy\n";
+                      add_header Content-Type text/plain;
+                  }
+                  
+                  # Security headers
+                  add_header X-Frame-Options "SAMEORIGIN" always;
+                  add_header X-XSS-Protection "1; mode=block" always;
+                  add_header X-Content-Type-Options "nosniff" always;
+                  add_header Referrer-Policy "no-referrer-when-downgrade" always;
+              }
+          }
+          EOF
+          
+          echo "✅ Alternative configuration created: ~/nginx_alternative.conf"
+          
+          echo ""
+          echo "🎯 Scripts Created!"
+          echo "=================="
+          echo "1. 🔧 Fix permissions: bash ~/fix_nginx_permissions.sh"
+          echo "2. 📄 Alternative config: ~/nginx_alternative.conf"
+          echo ""
+          echo "🚀 To apply permission fix:"
+          echo "bash ~/fix_nginx_permissions.sh"
+
+  restart-service:
+    runs-on: ubuntu-latest
+    needs: [fix-permissions]
+    if: github.event.inputs.fix_type == 'restart-service' || github.event.inputs.fix_type == 'full-reset'
+    
+    steps:
+    - name: Restart NGINX Service
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.HOST }}
+        username: ${{ secrets.USERNAME }}
+        key: ${{ secrets.SSH_KEY }}
+        port: ${{ secrets.PORT || '22' }}
+        timeout: 60s
+        command_timeout: 30s
+        script: |
+          echo "🔄 NGINX Service Restart"
+          echo "======================="
+          
+          # Create service restart script
+          cat > ~/restart_nginx.sh << 'EOF'
+          #!/bin/bash
+          
+          echo "🔄 Restarting NGINX service..."
+          
+          # Kill any stray nginx processes
+          sudo pkill nginx 2>/dev/null
+          sleep 2
+          
+          # Clean up PID files
+          sudo rm -f /run/nginx.pid /var/run/nginx.pid
+          
+          # Restart service
+          sudo systemctl stop nginx
+          sleep 1
+          sudo systemctl start nginx
+          
+          # Check status
+          if sudo systemctl is-active --quiet nginx; then
+            echo "✅ NGINX service restarted successfully"
+            
+            # Show details
+            echo "📊 Service status:"
+            sudo systemctl status nginx --no-pager -l
+            
+            # Test configuration
+            echo ""
+            echo "🧪 Configuration test:"
+            sudo nginx -t
+            
+            # Check ports
+            echo ""
+            echo "📡 Listening ports:"
+            sudo ss -tlnp | grep :80
+            
+          else
+            echo "❌ NGINX failed to restart"
+            echo "📄 Error details:"
+            sudo journalctl -u nginx --no-pager -n 10
+          fi
+          EOF
+          
+          chmod +x ~/restart_nginx.sh
+          echo "✅ Restart script created: ~/restart_nginx.sh"
+          echo ""
+          echo "🚀 To restart NGINX service:"
+          echo "bash ~/restart_nginx.sh"
+
+  test-and-verify:
+    runs-on: ubuntu-latest
+    needs: [restart-service]
+    if: always()
+    
+    steps:
+    - name: Test NGINX After Fix
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.HOST }}
+        username: ${{ secrets.USERNAME }}
+        key: ${{ secrets.SSH_KEY }}
+        port: ${{ secrets.PORT || '22' }}
+        timeout: 60s
+        command_timeout: 30s
+        script: |
+          echo "🧪 NGINX Post-Fix Verification"
+          echo "=============================="
+          
+          SERVER_IP=$(hostname -I | awk '{print $1}')
+          echo "🌐 Server IP: $SERVER_IP"
+          echo ""
+          
+          # Check if NGINX is running
+          if pgrep nginx > /dev/null; then
+            echo "✅ NGINX processes are running:"
+            ps aux | grep nginx | grep -v grep
+          else
+            echo "❌ No NGINX processes found"
+          fi
+          
+          echo ""
+          echo "📋 Available Fix Scripts:"
+          echo "========================"
+          ls -la ~/*nginx* ~/*fix* 2>/dev/null || echo "No fix scripts found"
+          
+          echo ""
+          echo "🎯 Next Steps:"
+          echo "============="
+          echo "1. 🔧 Run permission fix: bash ~/fix_nginx_permissions.sh"
+          echo "2. 🔄 Or restart service: bash ~/restart_nginx.sh"
+          echo "3. 🧪 Test access: curl http://localhost/health"
+          echo "4. 🌐 Access app: http://$SERVER_IP"
+          echo ""
+          echo "💡 If problems persist:"
+          echo "- Check system logs: sudo journalctl -u nginx"
+          echo "- Verify configuration: sudo nginx -t"
+          echo "- Contact system administrator for root access"

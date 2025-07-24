@@ -1,0 +1,315 @@
+name: SSH Debug Simple
+
+on:
+  workflow_dispatch:
+
+jobs:
+  check-secrets:
+    runs-on: ubuntu-latest
+    outputs:
+      has-host: ${{ steps.check.outputs.has-host }}
+      has-username: ${{ steps.check.outputs.has-username }}
+      has-ssh-key: ${{ steps.check.outputs.has-ssh-key }}
+      has-port: ${{ steps.check.outputs.has-port }}
+    
+    steps:
+    - name: Check secrets
+      id: check
+      run: |
+        echo "🔍 GitHub Secrets Configuration Check"
+        echo "====================================="
+        echo ""
+        
+        # Check HOST
+        if [ -n "${{ secrets.HOST }}" ]; then
+          echo "has-host=true" >> $GITHUB_OUTPUT
+          echo "✅ HOST: '${{ secrets.HOST }}'"
+          echo "   Length: ${#HOST_VALUE} characters"
+        else
+          echo "has-host=false" >> $GITHUB_OUTPUT
+          echo "❌ HOST: (not set or empty)"
+        fi
+        
+        # Check USERNAME  
+        if [ -n "${{ secrets.USERNAME }}" ]; then
+          echo "has-username=true" >> $GITHUB_OUTPUT
+          echo "✅ USERNAME: '${{ secrets.USERNAME }}'"
+          echo "   Length: ${#USERNAME_VALUE} characters"
+        else
+          echo "has-username=false" >> $GITHUB_OUTPUT
+          echo "❌ USERNAME: (not set or empty)"
+        fi
+        
+        # Check SSH_KEY
+        if [ -n "${{ secrets.SSH_KEY }}" ]; then
+          echo "has-ssh-key=true" >> $GITHUB_OUTPUT
+          echo "✅ SSH_KEY: (configured)"
+          echo "   Length: ${#SSH_KEY_VALUE} characters"
+          echo "   First line: $(echo "$SSH_KEY_VALUE" | head -1)"
+          echo "   Last line: $(echo "$SSH_KEY_VALUE" | tail -1)"
+          
+          # Validate SSH key format
+          if echo "$SSH_KEY_VALUE" | grep -q "BEGIN.*PRIVATE KEY"; then
+            echo "   ✅ Key format: Valid private key detected"
+          else
+            echo "   ⚠️ Key format: May not be a valid private key"
+          fi
+        else
+          echo "has-ssh-key=false" >> $GITHUB_OUTPUT
+          echo "❌ SSH_KEY: (not set or empty)"
+        fi
+        
+        # Check PORT
+        if [ -n "${{ secrets.PORT }}" ]; then
+          echo "has-port=true" >> $GITHUB_OUTPUT
+          echo "✅ PORT: '${{ secrets.PORT }}'"
+          
+          # Validate port number
+          if [[ "${{ secrets.PORT }}" =~ ^[0-9]+$ ]] && [ "${{ secrets.PORT }}" -ge 1 ] && [ "${{ secrets.PORT }}" -le 65535 ]; then
+            echo "   ✅ Port format: Valid port number"
+          else
+            echo "   ⚠️ Port format: Invalid port number (should be 1-65535)"
+          fi
+        else
+          echo "has-port=false" >> $GITHUB_OUTPUT
+          echo "⚠️ PORT: (not set - will default to 22)"
+        fi
+        
+        echo ""
+        echo "📊 Summary:"
+        echo "==========="
+        
+        # Count configured secrets
+        CONFIGURED=0
+        [ -n "${{ secrets.HOST }}" ] && CONFIGURED=$((CONFIGURED + 1))
+        [ -n "${{ secrets.USERNAME }}" ] && CONFIGURED=$((CONFIGURED + 1))
+        [ -n "${{ secrets.SSH_KEY }}" ] && CONFIGURED=$((CONFIGURED + 1))
+        
+        echo "Configured secrets: $CONFIGURED/3 required"
+        echo "Optional PORT: $([ -n "${{ secrets.PORT }}" ] && echo "configured" || echo "using default")"
+        
+        if [ $CONFIGURED -eq 3 ]; then
+          echo "🎉 All required secrets are configured!"
+          echo "✅ Ready for SSH connection test"
+        else
+          echo "⚠️ Missing secrets - SSH connection will likely fail"
+          echo "💡 Configure missing secrets at:"
+          echo "   https://github.com/ochtii/ravetracker-v3/settings/secrets/actions"
+        fi
+        
+        echo ""
+        echo "🔗 Connection test will use:"
+        echo "Host: ${{ secrets.HOST }}"
+        echo "Username: ${{ secrets.USERNAME }}"
+        echo "Port: ${{ secrets.PORT || '22 (default)' }}"
+        echo "SSH Key: $([ -n "${{ secrets.SSH_KEY }}" ] && echo "configured" || echo "missing")"
+      env:
+        HOST_VALUE: ${{ secrets.HOST }}
+        USERNAME_VALUE: ${{ secrets.USERNAME }}
+        SSH_KEY_VALUE: ${{ secrets.SSH_KEY }}
+
+  test-ssh:
+    needs: check-secrets
+    runs-on: ubuntu-latest
+    if: needs.check-secrets.outputs.has-host == 'true' && needs.check-secrets.outputs.has-username == 'true' && needs.check-secrets.outputs.has-ssh-key == 'true'
+    
+    steps:
+    - name: SSH Connection Test
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.HOST }}
+        username: ${{ secrets.USERNAME }}
+        key: ${{ secrets.SSH_KEY }}
+        port: ${{ secrets.PORT || '22' }}
+        timeout: 30s
+        command_timeout: 15s
+        debug: true
+        script: |
+          echo "🎉 SSH Connection Successful!"
+          echo "============================="
+          echo "🏠 Server: $(hostname)"
+          echo "👤 User: $(whoami)"
+          echo "📍 Directory: $(pwd)"
+          echo "🕒 Time: $(date)"
+          echo "🌐 IP Address: $(hostname -I | awk '{print $1}')"
+          echo "💾 Disk space:"
+          df -h / | head -2
+          echo "📊 Memory usage:"
+          free -h
+          echo "⚡ Uptime: $(uptime)"
+          
+          # Check/create RaveTracker directory
+          echo ""
+          echo "📁 RaveTracker Directory Check:"
+          if [ ! -d "/var/www/ravetracker-v3" ]; then
+            echo "📂 Creating /var/www/ravetracker-v3..."
+            sudo mkdir -p /var/www/ravetracker-v3
+            sudo chown $USER:$USER /var/www/ravetracker-v3
+            echo "✅ Directory created successfully"
+          else
+            echo "✅ /var/www/ravetracker-v3 exists"
+            echo "📋 Directory contents:"
+            ls -la /var/www/ravetracker-v3/
+            echo "📊 Directory permissions:"
+            ls -ld /var/www/ravetracker-v3/
+          fi
+          
+          echo ""
+          echo "🔧 System Information:"
+          echo "OS: $(cat /etc/os-release | grep PRETTY_NAME | cut -d'=' -f2 | tr -d '\"')"
+          echo "Kernel: $(uname -r)"
+          echo "Architecture: $(uname -m)"
+          
+          # Test git availability
+          echo ""
+          echo "🔍 Git Check:"
+          if command -v git &> /dev/null; then
+            echo "✅ Git is available: $(git --version)"
+          else
+            echo "❌ Git is not installed"
+          fi
+          
+          # Test internet connectivity
+          echo ""
+          echo "🌐 Internet Connectivity:"
+          if ping -c 1 github.com &> /dev/null; then
+            echo "✅ Can reach github.com"
+          else
+            echo "❌ Cannot reach github.com"
+          fi
+
+  skip-ssh-test:
+    needs: check-secrets
+    runs-on: ubuntu-latest
+    if: needs.check-secrets.outputs.has-host != 'true' || needs.check-secrets.outputs.has-username != 'true' || needs.check-secrets.outputs.has-ssh-key != 'true'
+    
+    steps:
+    - name: SSH Test Skipped
+      run: |
+        echo "⚠️ SSH Connection Test Skipped"
+        echo "============================="
+        echo "Missing required secrets:"
+        echo "HOST: ${{ needs.check-secrets.outputs.has-host == 'true' && '✅' || '❌' }}"
+        echo "USERNAME: ${{ needs.check-secrets.outputs.has-username == 'true' && '✅' || '❌' }}"
+        echo "SSH_KEY: ${{ needs.check-secrets.outputs.has-ssh-key == 'true' && '✅' || '❌' }}"
+        echo ""
+        echo "💡 Configure missing secrets at:"
+        echo "https://github.com/ochtii/ravetracker-v3/settings/secrets/actions"
+
+  deploy-test:
+    needs: [check-secrets, test-ssh]
+    runs-on: ubuntu-latest
+    if: needs.test-ssh.result == 'success'
+    
+    steps:
+    - name: Deploy temp_build
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.HOST }}
+        username: ${{ secrets.USERNAME }}
+        key: ${{ secrets.SSH_KEY }}
+        port: ${{ secrets.PORT || '22' }}
+        timeout: 120s
+        command_timeout: 60s
+        debug: true
+        script: |
+          echo "🚀 Starting RaveTracker v3.0 Deployment Test"
+          echo "============================================="
+          echo "📅 Start Time: $(date)"
+          echo ""
+          
+          cd /var/www/ravetracker-v3
+          
+          # Backup existing temp_build if it exists
+          if [ -d "temp_build" ]; then
+            echo "📦 Creating backup of existing temp_build..."
+            mv temp_build temp_build_backup_$(date +%Y%m%d_%H%M%S) 2>/dev/null || true
+          fi
+          
+          echo "🔧 Cloning repository..."
+          if git clone https://github.com/ochtii/ravetracker-v3.git temp_build; then
+            echo "✅ Repository cloned successfully"
+            
+            cd temp_build
+            echo "📊 Repository Information:"
+            echo "  - Current commit: $(git rev-parse --short HEAD)"
+            echo "  - Branch: $(git branch --show-current)"
+            echo "  - Last commit: $(git log -1 --pretty=format:'%h - %s (%cr)' --abbrev-commit)"
+            echo "  - Repository size: $(du -sh . | cut -f1)"
+            
+            echo ""
+            echo "📁 Project Structure:"
+            find . -maxdepth 2 -type f -name "*.json" -o -name "*.js" -o -name "*.ts" -o -name "*.svelte" -o -name "*.md" | head -10
+            
+            cd ..
+            
+            # Copy auto-update script if available
+            if [ -f "temp_build/auto-update-temp-build.sh" ]; then
+              cp temp_build/auto-update-temp-build.sh ./
+              chmod +x auto-update-temp-build.sh
+              echo "📋 Auto-update script installed for future deployments"
+            fi
+            
+            # Copy other useful scripts
+            if [ -d "temp_build/scripts" ]; then
+              cp temp_build/scripts/*.sh ./ 2>/dev/null || echo "No additional scripts found"
+              chmod +x *.sh 2>/dev/null
+              echo "📋 Deployment scripts copied"
+            fi
+            
+            echo ""
+            echo "✅ Deployment Test Completed Successfully!"
+            echo "📊 Final Status:"
+            echo "  - Repository: ochtii/ravetracker-v3"
+            echo "  - Location: /var/www/ravetracker-v3/temp_build"
+            echo "  - Completion Time: $(date)"
+            echo "  - Directory Size: $(du -sh temp_build | cut -f1)"
+            
+          else
+            echo "❌ Failed to clone repository"
+            echo "💡 Check if git is installed and github.com is accessible"
+            exit 1
+          fi
+
+  final-summary:
+    needs: [check-secrets, test-ssh, deploy-test, skip-ssh-test]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+    - name: Deployment Summary
+      run: |
+        echo "🎯 RaveTracker v3.0 SSH Debug Summary"
+        echo "===================================="
+        echo ""
+        
+        # Secrets check results
+        echo "🔐 Secrets Configuration:"
+        echo "HOST: ${{ needs.check-secrets.outputs.has-host == 'true' && '✅ Configured' || '❌ Missing' }}"
+        echo "USERNAME: ${{ needs.check-secrets.outputs.has-username == 'true' && '✅ Configured' || '❌ Missing' }}"
+        echo "SSH_KEY: ${{ needs.check-secrets.outputs.has-ssh-key == 'true' && '✅ Configured' || '❌ Missing' }}"
+        echo "PORT: ${{ needs.check-secrets.outputs.has-port == 'true' && '✅ Configured' || '⚠️ Using default (22)' }}"
+        echo ""
+        
+        # Job results
+        echo "📊 Job Results:"
+        echo "Secrets Check: ${{ needs.check-secrets.result }}"
+        echo "SSH Test: ${{ needs.test-ssh.result || 'skipped' }}"
+        echo "Deploy Test: ${{ needs.deploy-test.result || 'skipped' }}"
+        echo ""
+        
+        # Overall status
+        if [[ "${{ needs.deploy-test.result }}" == "success" ]]; then
+          echo "🎉 Overall Status: SUCCESS"
+          echo "✅ SSH connection working"
+          echo "✅ Deployment successful"
+          echo "✅ RaveTracker v3.0 ready for production deployment"
+        elif [[ "${{ needs.test-ssh.result }}" == "success" ]]; then
+          echo "⚠️ Overall Status: PARTIAL SUCCESS"
+          echo "✅ SSH connection working"
+          echo "⚠️ Deployment not tested (run deploy-test job manually)"
+        else
+          echo "❌ Overall Status: FAILED"
+          echo "❌ Configure missing secrets"
+          echo "💡 Setup guide: docs/DEPLOYMENT_SETUP.md"
+        fi

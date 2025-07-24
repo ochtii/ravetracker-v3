@@ -1,0 +1,204 @@
+name: Server Setup & Fix Permissions
+
+on:
+  workflow_dispatch:
+
+jobs:
+  setup-server:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Setup RaveTracker Server Environment
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.HOST }}
+        username: ${{ secrets.USERNAME }}
+        key: ${{ secrets.SSH_KEY }}
+        port: ${{ secrets.PORT || '22' }}
+        timeout: 120s
+        command_timeout: 60s
+        script: |
+          echo "🔧 RaveTracker v3.0 - Server Environment Setup"
+          echo "=============================================="
+          echo "👤 Current user: $(whoami)"
+          echo "🏠 Server: $(hostname)"
+          echo "📍 Working directory: $(pwd)"
+          echo ""
+          
+          # Check sudo access
+          echo "🔐 Checking sudo access..."
+          if sudo -n true 2>/dev/null; then
+            echo "✅ Passwordless sudo available"
+            SUDO_AVAILABLE=true
+          elif sudo -l &>/dev/null; then
+            echo "⚠️ Sudo available but may require password"
+            SUDO_AVAILABLE=true
+          else
+            echo "❌ No sudo access available"
+            SUDO_AVAILABLE=false
+          fi
+          
+          echo ""
+          echo "📁 Setting up directory structure..."
+          
+          if [ "$SUDO_AVAILABLE" = true ]; then
+            # Method 1: Using sudo (preferred)
+            echo "🔧 Using sudo method..."
+            
+            # Create main directory with sudo
+            if [ ! -d "/var/www/ravetracker-v3" ]; then
+              echo "📂 Creating /var/www/ravetracker-v3..."
+              sudo mkdir -p /var/www/ravetracker-v3
+              echo "✅ Main directory created"
+            else
+              echo "✅ /var/www/ravetracker-v3 already exists"
+            fi
+            
+            # Set ownership to current user
+            echo "🔐 Setting ownership to $USER..."
+            sudo chown -R $USER:$USER /var/www/ravetracker-v3
+            echo "✅ Ownership transferred to $USER"
+            
+            # Set correct permissions
+            echo "🔒 Setting permissions..."
+            sudo chmod -R 755 /var/www/ravetracker-v3
+            echo "✅ Permissions set to 755"
+            
+            # Create project structure
+            echo "📂 Creating project subdirectories..."
+            mkdir -p /var/www/ravetracker-v3/{releases,shared/{logs,uploads,node_modules},temp_build}
+            echo "✅ Project structure created"
+            
+            PROJECT_DIR="/var/www/ravetracker-v3"
+            
+          else
+            # Method 2: Using home directory (fallback)
+            echo "🏠 Using home directory method (fallback)..."
+            
+            # Create in home directory
+            mkdir -p ~/ravetracker-v3/{releases,shared/{logs,uploads,node_modules},temp_build}
+            echo "✅ Project structure created in home directory"
+            
+            PROJECT_DIR="$HOME/ravetracker-v3"
+            
+            # Try to create symlink if possible
+            if [ -w "/var/www" ] || sudo test -w "/var/www" 2>/dev/null; then
+              sudo ln -sf ~/ravetracker-v3 /var/www/ravetracker-v3
+              echo "✅ Symbolic link created: /var/www/ravetracker-v3 -> ~/ravetracker-v3"
+            else
+              echo "⚠️ Could not create symlink to /var/www/"
+            fi
+          fi
+          
+          echo ""
+          echo "📊 Final directory structure:"
+          echo "============================="
+          ls -la "$PROJECT_DIR"
+          
+          echo ""
+          echo "🔍 Ownership and permissions:"
+          echo "============================="
+          ls -ld "$PROJECT_DIR"
+          
+          if [ -d "$PROJECT_DIR/shared" ]; then
+            ls -la "$PROJECT_DIR/shared"
+          fi
+          
+          echo ""
+          echo "💾 Disk space check:"
+          echo "==================="
+          df -h "$PROJECT_DIR"
+          
+          echo ""
+          echo "🧪 Write test:"
+          echo "============="
+          TEST_FILE="$PROJECT_DIR/write_test.txt"
+          if echo "Write test successful" > "$TEST_FILE" 2>/dev/null; then
+            echo "✅ Write permissions confirmed"
+            rm "$TEST_FILE"
+          else
+            echo "❌ Write test failed"
+          fi
+          
+          echo ""
+          echo "🎉 Server setup completed!"
+          echo "=========================="
+          echo "📁 Project directory: $PROJECT_DIR"
+          echo "👤 Owner: $USER"
+          echo "🔒 Permissions: 755"
+          echo "📊 Subdirectories: releases, shared (logs, uploads, node_modules), temp_build"
+          
+          # Create a setup completion marker
+          echo "$(date): Server setup completed by $USER on $(hostname)" > "$PROJECT_DIR/setup_completed.log"
+          echo "✅ Setup completion logged"
+
+  verify-setup:
+    needs: setup-server
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Verify Server Setup
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.HOST }}
+        username: ${{ secrets.USERNAME }}
+        key: ${{ secrets.SSH_KEY }}
+        port: ${{ secrets.PORT || '22' }}
+        timeout: 60s
+        command_timeout: 30s
+        script: |
+          echo "🔍 RaveTracker v3.0 - Setup Verification"
+          echo "========================================"
+          
+          # Find project directory
+          if [ -d "/var/www/ravetracker-v3" ]; then
+            PROJECT_DIR="/var/www/ravetracker-v3"
+          elif [ -d "$HOME/ravetracker-v3" ]; then
+            PROJECT_DIR="$HOME/ravetracker-v3"
+          else
+            echo "❌ Project directory not found!"
+            exit 1
+          fi
+          
+          echo "📁 Project directory: $PROJECT_DIR"
+          
+          # Check required directories
+          REQUIRED_DIRS=(
+            "$PROJECT_DIR"
+            "$PROJECT_DIR/releases"
+            "$PROJECT_DIR/shared"
+            "$PROJECT_DIR/shared/logs"
+            "$PROJECT_DIR/shared/uploads"
+            "$PROJECT_DIR/shared/node_modules"
+            "$PROJECT_DIR/temp_build"
+          )
+          
+          echo ""
+          echo "✅ Directory verification:"
+          for dir in "${REQUIRED_DIRS[@]}"; do
+            if [ -d "$dir" ]; then
+              echo "  ✅ $dir"
+            else
+              echo "  ❌ $dir (missing)"
+            fi
+          done
+          
+          # Check write permissions
+          echo ""
+          echo "✅ Permission verification:"
+          if [ -w "$PROJECT_DIR" ]; then
+            echo "  ✅ Write permission to main directory"
+          else
+            echo "  ❌ No write permission to main directory"
+          fi
+          
+          # Check setup log
+          if [ -f "$PROJECT_DIR/setup_completed.log" ]; then
+            echo ""
+            echo "📋 Setup log:"
+            cat "$PROJECT_DIR/setup_completed.log"
+          fi
+          
+          echo ""
+          echo "🎯 Ready for deployment!"
+          echo "Use 'SSH Success - Deploy RaveTracker' workflow to deploy the application."

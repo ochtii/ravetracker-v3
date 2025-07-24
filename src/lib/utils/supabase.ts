@@ -5,7 +5,18 @@ const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Missing Supabase environment variables')
+  console.error('Missing Supabase environment variables:')
+  console.error('VITE_SUPABASE_URL:', supabaseUrl ? '✓ Set' : '✗ Missing')
+  console.error('VITE_SUPABASE_ANON_KEY:', supabaseAnonKey ? '✓ Set' : '✗ Missing')
+  console.error('Please check your .env file and ensure both variables are set correctly.')
+  throw new Error('Missing Supabase environment variables. Please check your .env file.')
+}
+
+// Check for dummy values
+if (supabaseUrl.includes('dummy-project-id') || supabaseAnonKey.includes('dummy-anon-key')) {
+  console.warn('⚠️  You are using dummy Supabase credentials!')
+  console.warn('Please replace them with your actual Supabase project credentials.')
+  console.warn('Visit https://supabase.com/dashboard to get your project URL and anon key.')
 }
 
 // Create Supabase client with type safety

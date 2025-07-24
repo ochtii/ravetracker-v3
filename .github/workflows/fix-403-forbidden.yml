@@ -1,0 +1,469 @@
+name: Fix 403 Forbidden Error
+
+on:
+  workflow_dispatch:
+    inputs:
+      fix_type:
+        description: 'Fix Type'
+        required: true
+        default: 'permissions'
+        type: choice
+        options:
+        - permissions
+        - create-content
+        - full-fix
+        - diagnosis
+
+jobs:
+  diagnose-403:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Diagnose 403 Forbidden Error
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.HOST }}
+        username: ${{ secrets.USERNAME }}
+        key: ${{ secrets.SSH_KEY }}
+        port: ${{ secrets.PORT || '22' }}
+        timeout: 120s
+        command_timeout: 60s
+        script: |
+          echo "🔍 Diagnosing 403 Forbidden Error"
+          echo "================================="
+          echo "📅 $(date)"
+          echo "👤 User: $(whoami)"
+          echo ""
+          
+          # Check NGINX status
+          echo "📊 NGINX Status:"
+          ps aux | grep nginx | grep -v grep || echo "No NGINX processes"
+          echo ""
+          
+          # Check document root directory
+          echo "📁 Document Root Check:"
+          DOC_ROOT="/var/www/ravetracker-v3/temp_build"
+          echo "Target directory: $DOC_ROOT"
+          
+          if [ -d "$DOC_ROOT" ]; then
+            echo "✅ Directory exists"
+            echo "📋 Directory permissions:"
+            ls -la "$DOC_ROOT"
+            echo ""
+            echo "📋 Parent directory permissions:"
+            ls -la /var/www/ravetracker-v3/
+          else
+            echo "❌ Directory does not exist: $DOC_ROOT"
+          fi
+          
+          # Check for index files
+          echo ""
+          echo "📄 Index Files Check:"
+          for file in index.html index.htm index.php; do
+            if [ -f "$DOC_ROOT/$file" ]; then
+              echo "✅ Found: $file"
+              ls -la "$DOC_ROOT/$file"
+            else
+              echo "❌ Missing: $file"
+            fi
+          done
+          
+          # Check NGINX configuration
+          echo ""
+          echo "📝 NGINX Configuration Check:"
+          if [ -f "/etc/nginx/sites-enabled/ravetracker-v3" ]; then
+            echo "✅ Config file exists"
+            echo "🔍 Document root in config:"
+            grep -n "root\|alias" /etc/nginx/sites-enabled/ravetracker-v3 || echo "No root directive found"
+          else
+            echo "❌ No config file found"
+          fi
+          
+          # Check ownership and permissions
+          echo ""
+          echo "🔒 Ownership and Permissions:"
+          echo "www-data user check:"
+          id www-data 2>/dev/null || echo "www-data user not found"
+          echo ""
+          echo "Directory ownership:"
+          ls -la /var/www/ | grep ravetracker || echo "No ravetracker directory in /var/www/"
+          
+          # Check NGINX error logs
+          echo ""
+          echo "📄 Recent NGINX Error Logs:"
+          tail -10 /var/log/nginx/error.log 2>/dev/null || echo "Cannot access error log"
+          echo ""
+          tail -5 /var/log/nginx/ravetracker-error.log 2>/dev/null || echo "No ravetracker error log"
+
+  fix-permissions:
+    runs-on: ubuntu-latest
+    needs: [diagnose-403]
+    if: github.event.inputs.fix_type == 'permissions' || github.event.inputs.fix_type == 'full-fix'
+    
+    steps:
+    - name: Fix File Permissions
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.HOST }}
+        username: ${{ secrets.USERNAME }}
+        key: ${{ secrets.SSH_KEY }}
+        port: ${{ secrets.PORT || '22' }}
+        timeout: 120s
+        command_timeout: 60s
+        script: |
+          echo "🔧 Fixing File Permissions for 403 Error"
+          echo "========================================"
+          
+          # Create permission fix script
+          cat > ~/fix_403_permissions.sh << 'EOF'
+          #!/bin/bash
+          
+          echo "🔧 Fixing 403 Forbidden Error"
+          echo "============================="
+          
+          DOC_ROOT="/var/www/ravetracker-v3"
+          
+          # Create directory if it doesn't exist
+          echo "📁 Ensuring directory structure exists..."
+          sudo mkdir -p $DOC_ROOT/temp_build
+          
+          # Set proper ownership
+          echo "👤 Setting ownership..."
+          sudo chown -R www-data:www-data $DOC_ROOT
+          sudo chown -R deploy:deploy $DOC_ROOT  # Allow deploy user access too
+          
+          # Set proper permissions
+          echo "🔒 Setting permissions..."
+          sudo chmod -R 755 $DOC_ROOT
+          sudo chmod -R 644 $DOC_ROOT/temp_build/* 2>/dev/null || echo "No files to set 644"
+          
+          # Ensure parent directories are accessible
+          sudo chmod 755 /var/www
+          sudo chmod 755 /var
+          
+          echo "✅ Permissions fixed"
+          
+          # Show current permissions
+          echo ""
+          echo "📋 Current permissions:"
+          ls -la $DOC_ROOT
+          ls -la $DOC_ROOT/temp_build/ 2>/dev/null || echo "temp_build is empty"
+          EOF
+          
+          chmod +x ~/fix_403_permissions.sh
+          echo "✅ Permission fix script created: ~/fix_403_permissions.sh"
+          
+          echo ""
+          echo "🚀 To fix permissions:"
+          echo "bash ~/fix_403_permissions.sh"
+
+  create-content:
+    runs-on: ubuntu-latest
+    needs: [fix-permissions]
+    if: github.event.inputs.fix_type == 'create-content' || github.event.inputs.fix_type == 'full-fix'
+    
+    steps:
+    - name: Create Default Content
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.HOST }}
+        username: ${{ secrets.USERNAME }}
+        key: ${{ secrets.SSH_KEY }}
+        port: ${{ secrets.PORT || '22' }}
+        timeout: 90s
+        command_timeout: 45s
+        script: |
+          echo "📄 Creating Default Content"
+          echo "=========================="
+          
+          # Create content creation script
+          cat > ~/create_default_content.sh << 'EOF'
+          #!/bin/bash
+          
+          echo "📄 Creating default RaveTracker content..."
+          
+          DOC_ROOT="/var/www/ravetracker-v3/temp_build"
+          
+          # Ensure directory exists
+          sudo mkdir -p $DOC_ROOT
+          
+          # Create a comprehensive index.html
+          sudo tee $DOC_ROOT/index.html > /dev/null << 'HTML'
+          <!DOCTYPE html>
+          <html lang="de">
+          <head>
+              <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <title>🎵 RaveTracker v3.0</title>
+              <style>
+                  * {
+                      margin: 0;
+                      padding: 0;
+                      box-sizing: border-box;
+                  }
+                  
+                  body {
+                      font-family: 'Arial', sans-serif;
+                      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                      min-height: 100vh;
+                      display: flex;
+                      justify-content: center;
+                      align-items: center;
+                      color: white;
+                      overflow: hidden;
+                  }
+                  
+                  .container {
+                      text-align: center;
+                      padding: 3rem;
+                      border-radius: 20px;
+                      background: rgba(255, 255, 255, 0.1);
+                      backdrop-filter: blur(15px);
+                      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+                      border: 1px solid rgba(255, 255, 255, 0.1);
+                      max-width: 600px;
+                      position: relative;
+                  }
+                  
+                  .container::before {
+                      content: '';
+                      position: absolute;
+                      top: -2px;
+                      left: -2px;
+                      right: -2px;
+                      bottom: -2px;
+                      background: linear-gradient(45deg, #00ff88, #00aaff, #aa00ff, #ff0088);
+                      border-radius: 20px;
+                      z-index: -1;
+                      animation: glow 3s ease-in-out infinite alternate;
+                  }
+                  
+                  h1 {
+                      font-size: 3.5rem;
+                      margin-bottom: 1rem;
+                      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+                      background: linear-gradient(45deg, #00ff88, #00aaff);
+                      -webkit-background-clip: text;
+                      -webkit-text-fill-color: transparent;
+                      background-clip: text;
+                      animation: pulse 2s ease-in-out infinite;
+                  }
+                  
+                  .subtitle {
+                      font-size: 1.5rem;
+                      margin-bottom: 2rem;
+                      opacity: 0.9;
+                  }
+                  
+                  .status {
+                      background: rgba(0, 255, 136, 0.2);
+                      border: 1px solid #00ff88;
+                      border-radius: 10px;
+                      padding: 1rem;
+                      margin-bottom: 2rem;
+                  }
+                  
+                  .loading {
+                      display: inline-block;
+                      width: 50px;
+                      height: 50px;
+                      border: 4px solid rgba(255, 255, 255, 0.3);
+                      border-radius: 50%;
+                      border-top-color: #00ff88;
+                      animation: spin 1s ease-in-out infinite;
+                      margin: 1rem 0;
+                  }
+                  
+                  .info {
+                      font-size: 1rem;
+                      opacity: 0.8;
+                      line-height: 1.6;
+                  }
+                  
+                  .tech-stack {
+                      margin-top: 2rem;
+                      display: flex;
+                      justify-content: center;
+                      gap: 1rem;
+                      flex-wrap: wrap;
+                  }
+                  
+                  .tech-item {
+                      background: rgba(255, 255, 255, 0.1);
+                      padding: 0.5rem 1rem;
+                      border-radius: 20px;
+                      font-size: 0.9rem;
+                      border: 1px solid rgba(255, 255, 255, 0.2);
+                  }
+                  
+                  @keyframes spin {
+                      to { transform: rotate(360deg); }
+                  }
+                  
+                  @keyframes pulse {
+                      0%, 100% { transform: scale(1); }
+                      50% { transform: scale(1.05); }
+                  }
+                  
+                  @keyframes glow {
+                      0% { opacity: 0.5; }
+                      100% { opacity: 1; }
+                  }
+                  
+                  .background-animation {
+                      position: absolute;
+                      top: 0;
+                      left: 0;
+                      width: 100%;
+                      height: 100%;
+                      z-index: -2;
+                      background: linear-gradient(45deg, #667eea, #764ba2, #667eea);
+                      background-size: 400% 400%;
+                      animation: gradientShift 8s ease infinite;
+                  }
+                  
+                  @keyframes gradientShift {
+                      0% { background-position: 0% 50%; }
+                      50% { background-position: 100% 50%; }
+                      100% { background-position: 0% 50%; }
+                  }
+              </style>
+          </head>
+          <body>
+              <div class="background-animation"></div>
+              <div class="container">
+                  <h1>🎵 RaveTracker v3.0</h1>
+                  <div class="subtitle">Die ultimative Rave & Techno Tracking Platform</div>
+                  
+                  <div class="status">
+                      <strong>✅ Server läuft erfolgreich!</strong>
+                      <div class="loading"></div>
+                      <div>Initialisierung abgeschlossen</div>
+                  </div>
+                  
+                  <div class="info">
+                      <p><strong>🎶 Features:</strong></p>
+                      <p>• Event Tracking & Management</p>
+                      <p>• DJ Set Aufzeichnung</p>
+                      <p>• Glassmorphism Design</p>
+                      <p>• Real-time Synchronisation</p>
+                  </div>
+                  
+                  <div class="tech-stack">
+                      <span class="tech-item">SvelteKit 5.0</span>
+                      <span class="tech-item">TypeScript</span>
+                      <span class="tech-item">Tailwind CSS</span>
+                      <span class="tech-item">Supabase</span>
+                      <span class="tech-item">NGINX</span>
+                  </div>
+                  
+                  <div style="margin-top: 2rem; font-size: 0.9rem; opacity: 0.7;">
+                      Server IP: <span id="server-ip"></span><br>
+                      Build: v3.0.0-beta<br>
+                      Status: <span style="color: #00ff88;">Online</span>
+                  </div>
+              </div>
+              
+              <script>
+                  // Get server IP (client-side)
+                  fetch('/health')
+                      .then(() => document.getElementById('server-ip').textContent = window.location.hostname)
+                      .catch(() => document.getElementById('server-ip').textContent = 'Unknown');
+              </script>
+          </body>
+          </html>
+          HTML
+          
+          # Create health check endpoint content
+          sudo mkdir -p $DOC_ROOT/health
+          echo "RaveTracker v3.0 - Healthy" | sudo tee $DOC_ROOT/health/index.html > /dev/null
+          
+          # Set proper permissions
+          sudo chown -R www-data:www-data $DOC_ROOT
+          sudo chmod -R 755 $DOC_ROOT
+          sudo chmod -R 644 $DOC_ROOT/*.html 2>/dev/null || echo "No HTML files to chmod"
+          
+          echo "✅ Default content created"
+          echo "📄 Files created:"
+          ls -la $DOC_ROOT
+          EOF
+          
+          chmod +x ~/create_default_content.sh
+          echo "✅ Content creation script created: ~/create_default_content.sh"
+          
+          echo ""
+          echo "🚀 To create default content:"
+          echo "bash ~/create_default_content.sh"
+
+  test-fix:
+    runs-on: ubuntu-latest
+    needs: [create-content]
+    if: always()
+    
+    steps:
+    - name: Test 403 Fix
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.HOST }}
+        username: ${{ secrets.USERNAME }}
+        key: ${{ secrets.SSH_KEY }}
+        port: ${{ secrets.PORT || '22' }}
+        timeout: 60s
+        command_timeout: 30s
+        script: |
+          echo "🧪 Testing 403 Fix"
+          echo "=================="
+          
+          SERVER_IP=$(hostname -I | awk '{print $1}')
+          echo "🌐 Server IP: $SERVER_IP"
+          echo ""
+          
+          # Create test script
+          cat > ~/test_403_fix.sh << 'EOF'
+          #!/bin/bash
+          
+          echo "🧪 Testing web server access..."
+          
+          # Test local access
+          echo "1. Testing localhost access:"
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost/ || echo "000")
+          echo "   HTTP Response: $HTTP_CODE"
+          
+          if [ "$HTTP_CODE" = "200" ]; then
+            echo "   ✅ Success! 403 error fixed"
+          elif [ "$HTTP_CODE" = "403" ]; then
+            echo "   ❌ Still getting 403 Forbidden"
+          else
+            echo "   ⚠️ Unexpected response: $HTTP_CODE"
+          fi
+          
+          # Test health endpoint
+          echo ""
+          echo "2. Testing health endpoint:"
+          HEALTH_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost/health || echo "000")
+          echo "   Health Response: $HEALTH_CODE"
+          
+          # Show file permissions
+          echo ""
+          echo "3. Current file permissions:"
+          ls -la /var/www/ravetracker-v3/temp_build/ 2>/dev/null || echo "   Directory not accessible"
+          
+          # Show NGINX status
+          echo ""
+          echo "4. NGINX status:"
+          ps aux | grep nginx | grep -v grep || echo "   No NGINX processes"
+          EOF
+          
+          chmod +x ~/test_403_fix.sh
+          
+          echo "📋 Available Fix Scripts:"
+          echo "========================"
+          ls -la ~/*403* ~/*fix* ~/*content* 2>/dev/null || echo "No scripts found"
+          
+          echo ""
+          echo "🎯 To fix the 403 error, run in order:"
+          echo "1. bash ~/fix_403_permissions.sh"
+          echo "2. bash ~/create_default_content.sh"  
+          echo "3. bash ~/test_403_fix.sh"
+          echo ""
+          echo "🌐 Then access: http://$SERVER_IP"

@@ -1,0 +1,148 @@
+name: Fix NGINX Configuration
+
+on:
+  workflow_dispatch:
+
+jobs:
+  fix-nginx:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Fix NGINX Configuration Error
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.HOST }}
+        username: ${{ secrets.USERNAME }}
+        key: ${{ secrets.SSH_KEY }}
+        port: ${{ secrets.PORT || '22' }}
+        timeout: 120s
+        command_timeout: 60s
+        script: |
+          echo "🔧 Fixing NGINX configuration error..."
+          echo "====================================="
+          
+          # Backup current config
+          sudo cp /etc/nginx/sites-available/ravetracker-v3 /etc/nginx/sites-available/ravetracker-v3.backup.$(date +%Y%m%d_%H%M%S)
+          
+          # Create corrected NGINX configuration
+          sudo tee /etc/nginx/sites-available/ravetracker-v3 > /dev/null <<'EOF'
+          server {
+              listen 80 default_server;
+              listen [::]:80 default_server;
+              
+              server_name _;
+              
+              # Logs
+              access_log /var/log/nginx/ravetracker-access.log;
+              error_log /var/log/nginx/ravetracker-error.log;
+              
+              # Try proxy first, fallback to static
+              location / {
+                  # Try proxy to SvelteKit app
+                  proxy_pass http://127.0.0.1:3000;
+                  proxy_http_version 1.1;
+                  proxy_set_header Upgrade $http_upgrade;
+                  proxy_set_header Connection 'upgrade';
+                  proxy_set_header Host $host;
+                  proxy_set_header X-Real-IP $remote_addr;
+                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto $scheme;
+                  proxy_cache_bypass $http_upgrade;
+                  
+                  # Short timeouts for quick fallback
+                  proxy_connect_timeout 5s;
+                  proxy_send_timeout 5s;
+                  proxy_read_timeout 5s;
+                  
+                  # Fallback to static files if proxy fails
+                  error_page 502 503 504 = @static;
+              }
+              
+              # Static file fallback
+              location @static {
+                  root /var/www/ravetracker-v3/temp_build;
+                  try_files $uri $uri/ /index.html;
+              }
+              
+              # Direct static assets with proper cache headers
+              location /static/ {
+                  alias /var/www/ravetracker-v3/temp_build/;
+                  expires 1y;
+                  add_header Cache-Control "public, max-age=31536000, immutable";
+              }
+              
+              # Cache static file extensions
+              location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
+                  root /var/www/ravetracker-v3/temp_build;
+                  expires 1y;
+                  add_header Cache-Control "public, max-age=31536000, immutable";
+              }
+              
+              # Health check
+              location /health {
+                  access_log off;
+                  return 200 "healthy\n";
+                  add_header Content-Type text/plain;
+              }
+              
+              # Security headers
+              add_header X-Frame-Options "SAMEORIGIN" always;
+              add_header X-XSS-Protection "1; mode=block" always;
+              add_header X-Content-Type-Options "nosniff" always;
+              add_header Referrer-Policy "no-referrer-when-downgrade" always;
+              
+              # Hide nginx version
+              server_tokens off;
+              
+              # Gzip compression
+              gzip on;
+              gzip_vary on;
+              gzip_min_length 1024;
+              gzip_types
+                  application/javascript
+                  application/json
+                  application/xml
+                  text/css
+                  text/javascript
+                  text/xml
+                  text/plain;
+          }
+          EOF
+          
+          echo "✅ Configuration file updated"
+          
+          # Test configuration
+          echo "🧪 Testing NGINX configuration..."
+          if sudo nginx -t; then
+            echo "✅ Configuration test passed"
+            
+            # Reload nginx
+            echo "🔄 Reloading NGINX..."
+            sudo systemctl reload nginx
+            
+            if sudo systemctl is-active --quiet nginx; then
+              echo "✅ NGINX reloaded successfully"
+              
+              SERVER_IP=$(hostname -I | awk '{print $1}')
+              echo ""
+              echo "🎉 NGINX configuration fixed!"
+              echo "🌐 Access URL: http://$SERVER_IP"
+              
+              # Test HTTP response
+              HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost/ || echo "000")
+              echo "📊 HTTP Response: $HTTP_CODE"
+              
+            else
+              echo "❌ NGINX failed to start after reload"
+              exit 1
+            fi
+          else
+            echo "❌ Configuration test failed"
+            echo "🔄 Restoring backup..."
+            sudo cp /etc/nginx/sites-available/ravetracker-v3.backup.* /etc/nginx/sites-available/ravetracker-v3 2>/dev/null || true
+            exit 1
+          fi
+          
+          echo ""
+          echo "📊 Current NGINX status:"
+          sudo systemctl status nginx --no-pager -l

@@ -1,0 +1,295 @@
+name: NGINX Setup (No Domain)
+
+on:
+  workflow_dispatch:
+    inputs:
+      setup_type:
+        description: 'NGINX Setup Type'
+        required: true
+        default: 'proxy'
+        type: choice
+        options:
+        - proxy
+        - static
+        - both
+
+jobs:
+  setup-nginx:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Setup NGINX for RaveTracker
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.HOST }}
+        username: ${{ secrets.USERNAME }}
+        key: ${{ secrets.SSH_KEY }}
+        port: ${{ secrets.PORT || '22' }}
+        timeout: 300s
+        command_timeout: 120s
+        script: |
+          echo "🌐 RaveTracker v3.0 - NGINX Setup (No Domain)"
+          echo "=============================================="
+          echo "📅 Setup started: $(date)"
+          echo "🖥️ Server: $(hostname)"
+          echo "📍 Server IP: $(hostname -I | awk '{print $1}')"
+          echo ""
+          
+          # Check if nginx is installed
+          if ! command -v nginx &> /dev/null; then
+            echo "📦 Installing NGINX..."
+            sudo apt update
+            sudo apt install nginx -y
+            sudo systemctl enable nginx
+            echo "✅ NGINX installed and enabled"
+          else
+            echo "✅ NGINX already installed: $(nginx -v 2>&1)"
+          fi
+          
+          # Start nginx if not running
+          if ! sudo systemctl is-active --quiet nginx; then
+            echo "🚀 Starting NGINX..."
+            sudo systemctl start nginx
+          fi
+          echo "✅ NGINX is running"
+          
+          # Create RaveTracker NGINX configuration
+          echo ""
+          echo "📝 Creating NGINX configuration..."
+          
+          if [ "${{ github.event.inputs.setup_type }}" = "proxy" ] || [ "${{ github.event.inputs.setup_type }}" = "both" ]; then
+            echo "🔧 Setting up proxy configuration..."
+            
+            sudo tee /etc/nginx/sites-available/ravetracker-v3 > /dev/null <<'EOF'
+          server {
+              listen 80 default_server;
+              listen [::]:80 default_server;
+              
+              server_name _;
+              
+              # Logs
+              access_log /var/log/nginx/ravetracker-access.log;
+              error_log /var/log/nginx/ravetracker-error.log;
+              
+              # Main location für SvelteKit App
+              location / {
+                  proxy_pass http://127.0.0.1:3000;
+                  proxy_http_version 1.1;
+                  proxy_set_header Upgrade $http_upgrade;
+                  proxy_set_header Connection 'upgrade';
+                  proxy_set_header Host $host;
+                  proxy_set_header X-Real-IP $remote_addr;
+                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto $scheme;
+                  proxy_cache_bypass $http_upgrade;
+                  
+                  # Timeout settings
+                  proxy_connect_timeout 60s;
+                  proxy_send_timeout 60s;
+                  proxy_read_timeout 60s;
+              }
+              
+              # Fallback zu statischen Dateien wenn App offline
+              location /static/ {
+                  alias /var/www/ravetracker-v3/temp_build/build/client/;
+                  expires 1y;
+                  add_header Cache-Control "public, max-age=31536000, immutable";
+              }
+              
+              # Health check
+              location /health {
+                  access_log off;
+                  return 200 "healthy\n";
+                  add_header Content-Type text/plain;
+              }
+              
+              # Security headers
+              add_header X-Frame-Options "SAMEORIGIN" always;
+              add_header X-XSS-Protection "1; mode=block" always;
+              add_header X-Content-Type-Options "nosniff" always;
+              add_header Referrer-Policy "no-referrer-when-downgrade" always;
+              
+              # Hide nginx version
+              server_tokens off;
+              
+              # Gzip compression
+              gzip on;
+              gzip_vary on;
+              gzip_min_length 1024;
+              gzip_types
+                  application/javascript
+                  application/json
+                  application/xml
+                  text/css
+                  text/javascript
+                  text/xml
+                  text/plain;
+          }
+          EOF
+            
+            echo "✅ Proxy configuration created"
+          fi
+          
+          if [ "${{ github.event.inputs.setup_type }}" = "static" ]; then
+            echo "🔧 Setting up static file configuration..."
+            
+            sudo tee /etc/nginx/sites-available/ravetracker-v3 > /dev/null <<'EOF'
+          server {
+              listen 80 default_server;
+              listen [::]:80 default_server;
+              
+              server_name _;
+              
+              root /var/www/ravetracker-v3/temp_build;
+              index index.html index.htm;
+              
+              # Logs
+              access_log /var/log/nginx/ravetracker-access.log;
+              error_log /var/log/nginx/ravetracker-error.log;
+              
+              location / {
+                  try_files $uri $uri/ /index.html;
+              }
+              
+              # Cache static files
+              location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
+                  expires 1y;
+                  add_header Cache-Control "public, max-age=31536000, immutable";
+              }
+              
+              # Security headers
+              add_header X-Frame-Options "SAMEORIGIN" always;
+              add_header X-XSS-Protection "1; mode=block" always;
+              add_header X-Content-Type-Options "nosniff" always;
+              
+              server_tokens off;
+              
+              gzip on;
+              gzip_types text/plain text/css application/json application/javascript text/xml application/xml;
+          }
+          EOF
+            
+            echo "✅ Static file configuration created"
+          fi
+          
+          # Enable the site
+          echo ""
+          echo "🔗 Enabling RaveTracker site..."
+          sudo ln -sf /etc/nginx/sites-available/ravetracker-v3 /etc/nginx/sites-enabled/
+          
+          # Disable default site
+          sudo rm -f /etc/nginx/sites-enabled/default
+          echo "✅ Default site disabled"
+          
+          # Test configuration
+          echo ""
+          echo "🧪 Testing NGINX configuration..."
+          if sudo nginx -t; then
+            echo "✅ NGINX configuration is valid"
+            
+            # Reload nginx
+            echo "🔄 Reloading NGINX..."
+            sudo systemctl reload nginx
+            echo "✅ NGINX reloaded successfully"
+          else
+            echo "❌ NGINX configuration test failed"
+            exit 1
+          fi
+          
+          # Setup firewall
+          echo ""
+          echo "🛡️ Configuring firewall..."
+          if command -v ufw &> /dev/null; then
+            sudo ufw allow 'Nginx HTTP' 2>/dev/null || sudo ufw allow 80/tcp
+            echo "✅ Firewall configured for HTTP"
+          else
+            echo "⚠️ UFW not available, manual firewall configuration may be needed"
+          fi
+          
+          # Get server IP
+          SERVER_IP=$(hostname -I | awk '{print $1}')
+          
+          echo ""
+          echo "🎉 NGINX Setup completed!"
+          echo "========================"
+          echo "🌐 Access URL: http://$SERVER_IP"
+          echo "📊 Configuration: ${{ github.event.inputs.setup_type }}"
+          echo "📁 Document root: /var/www/ravetracker-v3/temp_build"
+          echo "📝 Access log: /var/log/nginx/ravetracker-access.log"
+          echo "📝 Error log: /var/log/nginx/ravetracker-error.log"
+          echo ""
+          
+          # Status check
+          echo "📊 NGINX Status:"
+          sudo systemctl status nginx --no-pager -l
+          
+          echo ""
+          echo "🔍 Listening ports:"
+          sudo netstat -tlnp | grep :80 || sudo ss -tlnp | grep :80
+          
+          # Create info file
+          echo "NGINX setup completed on $(date)" > /var/www/ravetracker-v3/nginx_setup.log
+          echo "Access URL: http://$SERVER_IP" >> /var/www/ravetracker-v3/nginx_setup.log
+          echo "Configuration type: ${{ github.event.inputs.setup_type }}" >> /var/www/ravetracker-v3/nginx_setup.log
+
+  test-nginx:
+    needs: setup-nginx
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Test NGINX Setup
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.HOST }}
+        username: ${{ secrets.USERNAME }}
+        key: ${{ secrets.SSH_KEY }}
+        port: ${{ secrets.PORT || '22' }}
+        timeout: 60s
+        command_timeout: 30s
+        script: |
+          echo "🧪 Testing NGINX Setup"
+          echo "====================="
+          
+          # Get server IP
+          SERVER_IP=$(hostname -I | awk '{print $1}')
+          echo "🌐 Server IP: $SERVER_IP"
+          
+          # Test if nginx is running
+          if sudo systemctl is-active --quiet nginx; then
+            echo "✅ NGINX is running"
+          else
+            echo "❌ NGINX is not running"
+            exit 1
+          fi
+          
+          # Test if port 80 is listening
+          if sudo netstat -tlnp | grep -q :80 || sudo ss -tlnp | grep -q :80; then
+            echo "✅ NGINX is listening on port 80"
+          else
+            echo "❌ NGINX is not listening on port 80"
+          fi
+          
+          # Test HTTP response
+          echo ""
+          echo "🔍 Testing HTTP response..."
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost/ || echo "000")
+          echo "HTTP Response Code: $HTTP_CODE"
+          
+          if [ "$HTTP_CODE" -eq 200 ] || [ "$HTTP_CODE" -eq 502 ] || [ "$HTTP_CODE" -eq 404 ]; then
+            echo "✅ NGINX is responding (code: $HTTP_CODE)"
+          else
+            echo "⚠️ Unexpected response code: $HTTP_CODE"
+          fi
+          
+          echo ""
+          echo "🎯 Setup Summary:"
+          echo "================"
+          echo "✅ NGINX installed and running"
+          echo "✅ Configuration deployed"
+          echo "✅ Firewall configured"
+          echo "🌐 Access your site at: http://$SERVER_IP"
+          echo ""
+          echo "📋 Next steps:"
+          echo "1. Deploy your RaveTracker application"
+          echo "2. Start the SvelteKit server (if using proxy mode)"
+          echo "3. Test the application in your browser"
