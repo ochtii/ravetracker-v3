@@ -54,14 +54,20 @@ chmod +x quick-fix.sh
 ## 🔧 Verwendung:
 
 ```bash
-# Automatisch (empfohlen):
+# 🚀 Automatisch (empfohlen):
 git add .
 git commit -m "feat: neue Features"
 git push origin main
 
-# Manuell:
+# 🛠️ Manuell:
 npm run deploy
 
-# Rollback (auf Server):
+# 🔄 Rollback (auf Server):
 ./rollback.sh
+
+# 🔥 Server komplett zurücksetzen:
+./reset-server.sh
+
+# 🧹 Lokales Reset (Windows):
+npm run reset:local
 ```
