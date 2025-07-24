@@ -19,7 +19,12 @@ if [ -d "$TEMP_BUILD" ]; then
     
     # Pull latest changes
     git fetch origin main
+    
+    # Force reset to avoid merge conflicts (temp_build should always match GitHub)
     git reset --hard origin/main
+    
+    # Clean any untracked files
+    git clean -fd
     
     # Get new commit hash
     NEW_COMMIT=$(git rev-parse HEAD)

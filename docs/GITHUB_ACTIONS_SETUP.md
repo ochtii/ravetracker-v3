@@ -55,8 +55,19 @@ git push origin main
 ## 📊 Deployment Triggers:
 
 - **✅ Automatisch:** Jeder `git push` auf `main` branch
+- **🔄 temp_build Update:** Automatisch bei Änderungen in deploy/, package.json, etc.
 - **🎯 Manuell:** GitHub Actions → "Run workflow" Button
 - **🔧 SSH:** `ssh deploy@server && cd /var/www/ravetracker-v3 && ./deploy.sh`
+
+## 🆕 Neue GitHub Actions Workflows:
+
+### 1. Deploy to Production
+- **Trigger:** Push auf main branch
+- **Funktion:** Komplettes Deployment mit Build und PM2 Restart
+
+### 2. Update temp_build  
+- **Trigger:** Push mit Änderungen in deploy/, package.json, etc.
+- **Funktion:** Nur temp_build und Scripts aktualisieren (ohne Deployment)
 
 ## 🚨 Troubleshooting:
 

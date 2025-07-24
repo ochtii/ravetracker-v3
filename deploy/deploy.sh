@@ -84,14 +84,20 @@ npm prune --production
 
 echo "🔧 Setting up deployment scripts..."
 # Copy deployment scripts to main directory and make executable
-cp "$RELEASE_PATH/deploy/deploy.sh" "$APP_PATH/"
-chmod +x "$APP_PATH/deploy.sh"
+# Only copy if the source is newer or different
+if [ "$RELEASE_PATH/deploy/deploy.sh" -nt "$APP_PATH/deploy.sh" ] || [ ! -f "$APP_PATH/deploy.sh" ]; then
+    cp "$RELEASE_PATH/deploy/deploy.sh" "$APP_PATH/"
+    chmod +x "$APP_PATH/deploy.sh"
+    echo "✅ deploy.sh updated"
+fi
 
 # Copy health-check.sh if it exists
 if [ -f "$RELEASE_PATH/deploy/health-check.sh" ]; then
-    cp "$RELEASE_PATH/deploy/health-check.sh" "$APP_PATH/"
-    chmod +x "$APP_PATH/health-check.sh"
-    echo "✅ health-check.sh copied"
+    if [ "$RELEASE_PATH/deploy/health-check.sh" -nt "$APP_PATH/health-check.sh" ] || [ ! -f "$APP_PATH/health-check.sh" ]; then
+        cp "$RELEASE_PATH/deploy/health-check.sh" "$APP_PATH/"
+        chmod +x "$APP_PATH/health-check.sh"
+        echo "✅ health-check.sh updated"
+    fi
 else
     echo "⚠️ health-check.sh not found, skipping..."
 fi

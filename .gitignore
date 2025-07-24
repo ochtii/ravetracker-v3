@@ -194,3 +194,4 @@ $RECYCLE.BIN/
 # Build scripts (diese sind wichtig für Deployment!)
 # scripts/dev-setup.bat
 # scripts/build.bat
+docs/GITHUB_ACTIONS_SETUP.md

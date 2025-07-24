@@ -39,6 +39,15 @@ jobs:
             echo "🚀 Starting deployment on $(hostname)..."
             cd /var/www/ravetracker-v3
             
+            # First update temp_build automatically
+            echo "🔄 Auto-updating temp_build..."
+            if [ -f "auto-update-temp-build.sh" ]; then
+              chmod +x auto-update-temp-build.sh
+              ./auto-update-temp-build.sh
+            else
+              echo "⚠️ auto-update-temp-build.sh not found, skipping temp_build update"
+            fi
+            
             # Make sure deploy script is executable
             chmod +x deploy.sh
             
