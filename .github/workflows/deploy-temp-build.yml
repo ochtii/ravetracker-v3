@@ -1,0 +1,75 @@
+name: Deploy temp_build to Production
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Test SSH Connection
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.HOST }}
+        username: ${{ secrets.USERNAME }}
+        key: ${{ secrets.SSH_KEY }}
+        port: ${{ secrets.PORT || 22 }}
+        timeout: 60s
+        command_timeout: 30s
+        script: |
+          echo "🔗 SSH Connection successful!"
+          echo "📍 Current directory: $(pwd)"
+          echo "👤 Current user: $(whoami)"
+          echo "🕒 Server time: $(date)"
+          
+    - name: Deploy to temp_build
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.HOST }}
+        username: ${{ secrets.USERNAME }}
+        key: ${{ secrets.SSH_KEY }}
+        port: ${{ secrets.PORT || 22 }}
+        timeout: 120s
+        command_timeout: 60s
+        script: |
+          echo "🔄 Starting temp_build deployment..."
+          cd /var/www/ravetracker-v3
+          
+          # Check if auto-update script exists
+          if [ -f "auto-update-temp-build.sh" ]; then
+            echo "📋 Using auto-update script..."
+            chmod +x auto-update-temp-build.sh
+            ./auto-update-temp-build.sh
+            echo "✅ temp_build updated via auto-update script"
+          else
+            echo "📁 Manual temp_build update..."
+            
+            # Initialize temp_build if not exists
+            if [ ! -d "temp_build" ]; then
+              echo "🔧 Initializing temp_build directory..."
+              git clone https://github.com/ochtii/ravetracker-v3.git temp_build
+            fi
+            
+            # Update temp_build
+            cd temp_build
+            echo "📥 Fetching latest changes..."
+            git fetch origin main
+            git reset --hard origin/main
+            git clean -fd
+            echo "✅ temp_build updated to latest main"
+            
+            # Copy deployment scripts
+            cd ..
+            echo "📋 Updating deployment scripts..."
+            cp temp_build/scripts/*.sh ./ 2>/dev/null || echo "No scripts to copy"
+            chmod +x *.sh 2>/dev/null || echo "No shell scripts found"
+            echo "✅ Deployment complete"
+          fi
+          
+          echo "🎉 temp_build deployment finished successfully!"
