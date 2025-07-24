@@ -1,5 +1,5 @@
 import { sveltekit } from '@sveltejs/kit/vite';
-import { defineConfig } from 'vitest/config';
+import { defineConfig } from 'vite';
 
 export default defineConfig({
 	plugins: [sveltekit()],
@@ -26,17 +26,7 @@ export default defineConfig({
 	build: {
 		target: 'esnext',
 		sourcemap: true,
-		minify: 'esbuild',
-		rollupOptions: {
-			output: {
-				manualChunks: {
-					// Vendor chunk for better caching
-					vendor: ['svelte', '@sveltejs/kit'],
-					supabase: ['@supabase/supabase-js'],
-					ui: ['lucide-svelte']
-				}
-			}
-		}
+		minify: 'esbuild'
 	},
 
 	// CSS configuration
@@ -44,22 +34,8 @@ export default defineConfig({
 		postcss: './postcss.config.js'
 	},
 
-	// Define global constants
-	define: {
-		'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'development'),
-		__APP_VERSION__: JSON.stringify(process.env.npm_package_version || 'dev')
-	},
-
 	// Environment variables
 	envPrefix: ['VITE_', 'PUBLIC_'],
-
-	// Vitest configuration
-	test: {
-		include: ['src/**/*.{test,spec}.{js,ts}'],
-		environment: 'jsdom',
-		globals: true,
-		setupFiles: ['src/lib/test/setup.ts']
-	},
 
 	// Optimizations
 	optimizeDeps: {
@@ -69,16 +45,5 @@ export default defineConfig({
 			'clsx',
 			'tailwind-merge'
 		]
-	},
-
-	// Resolve configuration
-	resolve: {
-		alias: {
-			$components: './src/lib/components',
-			$stores: './src/lib/stores',
-			$utils: './src/lib/utils',
-			$types: './src/lib/types',
-			$schemas: './src/lib/schemas'
-		}
 	}
 });

@@ -16,23 +16,6 @@
 		"allowSyntheticDefaultImports": true,
 		"isolatedModules": true,
 		"verbatimModuleSyntax": true,
-		
-		// Path mapping for cleaner imports
-		"baseUrl": ".",
-		"paths": {
-			"$lib": ["./src/lib"],
-			"$lib/*": ["./src/lib/*"],
-			"$components": ["./src/lib/components"],
-			"$components/*": ["./src/lib/components/*"],
-			"$stores": ["./src/lib/stores"],
-			"$stores/*": ["./src/lib/stores/*"],
-			"$utils": ["./src/lib/utils"],
-			"$utils/*": ["./src/lib/utils/*"],
-			"$types": ["./src/lib/types"],
-			"$types/*": ["./src/lib/types/*"],
-			"$schemas": ["./src/lib/schemas"],
-			"$schemas/*": ["./src/lib/schemas/*"]
-		},
 
 		// Additional strict checks
 		"noImplicitAny": true,
