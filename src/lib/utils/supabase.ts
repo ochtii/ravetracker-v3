@@ -300,7 +300,7 @@ export const db = {
         .from('event_attendance')
         .select(`
           *,
-          event:events!event_attendance_event_id_fkey(
+          event:events(
             id,
             title,
             date_time,
