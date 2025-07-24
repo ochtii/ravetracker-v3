@@ -13,7 +13,7 @@
 	let dropdownElement: HTMLElement;
 	
 	$: userInitials = getUserInitials(user);
-	$: userRole = user?.user_metadata?.role || user?.role || 'user';
+	$: userRole = user?.is_organizer ? 'organizer' : 'user';
 	
 	function getUserInitials(user: any): string {
 		if (!user) return 'U';
@@ -94,7 +94,7 @@
 		}
 	];
 	
-	$: adminItems = userRole === 'admin' || userRole === 'super_admin' ? [
+	$: adminItems = userRole === 'organizer' ? [
 		{
 			label: 'Admin Panel',
 			href: '/admin',

@@ -34,17 +34,21 @@ export const hasError = derived(
 // User role and permissions
 export const userRole = derived(
   profile,
-  ($profile) => $profile?.role || 'user'
+  ($profile) => {
+    if (!$profile) return 'user'
+    if ($profile.is_organizer) return 'organizer'
+    return 'user'
+  }
 )
 
 export const isAdmin = derived(
-  userRole,
-  ($role) => $role === 'admin'
+  profile,
+  ($profile) => $profile?.is_organizer || false // For now, organizers have admin-like permissions
 )
 
 export const isOrganizer = derived(
-  userRole,
-  ($role) => $role === 'organizer' || $role === 'admin'
+  profile,
+  ($profile) => $profile?.is_organizer || false
 )
 
 export const isVerified = derived(
@@ -62,8 +66,8 @@ export const authState = derived(
     loading: $loading,
     error: $error,
     isAuthenticated: !!$user,
-    isAdmin: $profile?.role === 'admin',
-    isOrganizer: $profile?.role === 'organizer' || $profile?.role === 'admin',
+    isAdmin: $profile?.is_organizer || false,
+    isOrganizer: $profile?.is_organizer || false,
     isVerified: $profile?.is_verified || false
   })
 )
@@ -413,9 +417,9 @@ async function loadUserProfile(userId: string) {
           .from('profiles')
           .insert({
             user_id: userId,
-            role: 'user',
+            is_organizer: false,
             is_verified: false,
-            is_active: true
+            is_private: false
           })
           .select()
           .single()
@@ -445,16 +449,16 @@ function clearAuthState() {
 // Permission helpers
 export const permissions = {
   canCreateEvent: derived(
-    [isAuthenticated, userRole],
-    ([$isAuthenticated, $userRole]) => 
-      $isAuthenticated && ($userRole === 'organizer' || $userRole === 'admin')
+    [isAuthenticated, isOrganizer],
+    ([$isAuthenticated, $isOrganizer]) => 
+      $isAuthenticated && $isOrganizer
   ),
 
   canEditEvent: derived(
     [user, profile],
     ([$user, $profile]) => (eventOrganizerId: string) => {
       if (!$user || !$profile) return false
-      return $profile.role === 'admin' || $user.id === eventOrganizerId
+      return $profile.is_organizer || $user.id === eventOrganizerId
     }
   ),
 
@@ -462,18 +466,18 @@ export const permissions = {
     [user, profile],
     ([$user, $profile]) => (eventOrganizerId: string) => {
       if (!$user || !$profile) return false
-      return $profile.role === 'admin' || $user.id === eventOrganizerId
+      return $profile.is_organizer || $user.id === eventOrganizerId
     }
   ),
 
   canModerateContent: derived(
-    userRole,
-    ($userRole) => $userRole === 'admin'
+    isOrganizer,
+    ($isOrganizer) => $isOrganizer
   ),
 
   canAccessAdminPanel: derived(
-    userRole,
-    ($userRole) => $userRole === 'admin'
+    isOrganizer,
+    ($isOrganizer) => $isOrganizer
   )
 }
 
