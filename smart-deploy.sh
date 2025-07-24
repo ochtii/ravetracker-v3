@@ -41,6 +41,21 @@ PM2_APP_NAME="ravetracker-v3"
 # Ensure we're in the right directory
 cd "$APP_PATH" || error "Cannot access app directory: $APP_PATH"
 
+# Clean up old deploy system artifacts
+if [ -d "$APP_PATH/temp_build" ]; then
+    log "🧹 Removing old temp_build directory..."
+    rm -rf "$APP_PATH/temp_build"
+    success "Old temp_build removed"
+fi
+
+# Remove other old artifacts
+for old_dir in "releases" "shared"; do
+    if [ -d "$APP_PATH/$old_dir" ]; then
+        log "🧹 Removing old directory: $old_dir"
+        rm -rf "$APP_PATH/$old_dir"
+    fi
+done
+
 log "🚀 Starting Smart Deploy for RaveTracker v3.0"
 log "👤 Running as: $(whoami)"
 log "📁 Working directory: $(pwd)"

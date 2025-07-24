@@ -36,10 +36,20 @@
 
 ## 📋 Nächste Schritte:
 
-1. **Server Setup**: Die Befehle aus `server-setup.sh` auf dem Server ausführen
-2. **GitHub Secrets**: Sicherstellen dass SSH-Credentials in GitHub hinterlegt sind
-3. **Test Deployment**: Erste Änderung commiten und pushen zum Testen
-4. **Monitoring**: PM2 Logs überwachen beim ersten Deployment
+### Sofortiger Fix für aktuelles Problem:
+```bash
+# Auf dem Server ausführen:
+wget https://raw.githubusercontent.com/ochtii/ravetracker-v3/main/quick-fix.sh
+chmod +x quick-fix.sh
+./quick-fix.sh
+```
+
+### Vollständige Migration:
+1. **Server Cleanup**: Die Befehle aus `cleanup-server.sh` auf dem Server ausführen
+2. **Deploy Scripts**: Neue Deploy-Skripte hochladen und ausführbar machen
+3. **GitHub Secrets**: Sicherstellen dass SSH-Credentials in GitHub hinterlegt sind
+4. **Test Deployment**: Erste Änderung commiten und pushen zum Testen
+5. **Monitoring**: PM2 Logs überwachen beim ersten Deployment
 
 ## 🔧 Verwendung:
 
