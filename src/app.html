@@ -1,12 +1,134 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="dark">
 	<head>
 		<meta charset="utf-8" />
-		<link rel="icon" href="%sveltekit.assets%/favicon.svg" />
+		<link rel="icon" href="%sveltekit.assets%/favicon.png" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		
+		<!-- Primary Meta Tags -->
+		<title>RaveTracker v3.0 - Discover Rave & Techno Events</title>
+		<meta name="title" content="RaveTracker v3.0 - Discover Rave & Techno Events" />
+		<meta name="description" content="The ultimate platform for discovering and managing rave & techno events. Join the electronic music community and never miss a beat." />
+		<meta name="author" content="RaveTracker" />
+		<meta name="keywords" content="rave, techno, events, electronic music, EDM, festivals, clubs, parties" />
+		
+		<!-- Open Graph / Facebook -->
+		<meta property="og:type" content="website" />
+		<meta property="og:url" content="https://ravetracker.com/" />
+		<meta property="og:title" content="RaveTracker v3.0 - Discover Rave & Techno Events" />
+		<meta property="og:description" content="The ultimate platform for discovering and managing rave & techno events. Join the electronic music community and never miss a beat." />
+		<meta property="og:image" content="%sveltekit.assets%/og-image.jpg" />
+		
+		<!-- Twitter -->
+		<meta property="twitter:card" content="summary_large_image" />
+		<meta property="twitter:url" content="https://ravetracker.com/" />
+		<meta property="twitter:title" content="RaveTracker v3.0 - Discover Rave & Techno Events" />
+		<meta property="twitter:description" content="The ultimate platform for discovering and managing rave & techno events. Join the electronic music community and never miss a beat." />
+		<meta property="twitter:image" content="%sveltekit.assets%/og-image.jpg" />
+		
+		<!-- PWA Meta Tags -->
+		<meta name="theme-color" content="#0ea5e9" />
+		<meta name="background-color" content="#1a1a1a" />
+		<link rel="manifest" href="%sveltekit.assets%/manifest.json" />
+		
+		<!-- Apple Touch Icon -->
+		<link rel="apple-touch-icon" href="%sveltekit.assets%/apple-touch-icon.png" />
+		<meta name="apple-mobile-web-app-capable" content="yes" />
+		<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+		
+		<!-- Preload Critical Fonts -->
+		<link rel="preload" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" as="style" />
+		<link rel="preload" href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" as="style" />
+		<link rel="preload" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" as="style" />
+		
+		<!-- Load Fonts -->
+		<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+		<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet" />
+		<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+		
+		<!-- Critical CSS for faster loading -->
+		<style>
+			/* Critical CSS for instant loading */
+			* {
+				box-sizing: border-box;
+			}
+			
+			html {
+				scroll-behavior: smooth;
+			}
+			
+			body {
+				margin: 0;
+				padding: 0;
+				min-height: 100vh;
+				font-family: 'Inter', system-ui, sans-serif;
+				background: linear-gradient(135deg, #1a1a1a 0%, #0f0f0f 50%, #1a1a1a 100%);
+				color: #ffffff;
+				overflow-x: hidden;
+			}
+			
+			/* Loading animation */
+			.loading-spinner {
+				display: inline-block;
+				width: 40px;
+				height: 40px;
+				border: 3px solid rgba(14, 165, 233, 0.3);
+				border-radius: 50%;
+				border-top-color: #0ea5e9;
+				animation: spin 1s ease-in-out infinite;
+			}
+			
+			@keyframes spin {
+				to { transform: rotate(360deg); }
+			}
+			
+			/* Glassmorphism base styles */
+			.glass {
+				background: rgba(255, 255, 255, 0.1);
+				backdrop-filter: blur(10px);
+				border: 1px solid rgba(255, 255, 255, 0.2);
+				box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+			}
+		</style>
+		
+		<!-- Structured Data for SEO -->
+		<script type="application/ld+json">
+		{
+			"@context": "https://schema.org",
+			"@type": "WebApplication",
+			"name": "RaveTracker v3.0",
+			"description": "The ultimate platform for discovering and managing rave & techno events",
+			"url": "https://ravetracker.com",
+			"applicationCategory": "EventApplication",
+			"operatingSystem": "Any",
+			"offers": {
+				"@type": "Offer",
+				"price": "0",
+				"priceCurrency": "USD"
+			},
+			"author": {
+				"@type": "Organization",
+				"name": "RaveTracker"
+			}
+		}
+		</script>
+		
 		%sveltekit.head%
 	</head>
-	<body data-sveltekit-preload-data="hover">
+	
+	<body data-sveltekit-preload-data="hover" class="antialiased">
+		<!-- Loading fallback for users with JavaScript disabled -->
+		<noscript>
+			<div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #1a1a1a 0%, #0f0f0f 50%, #1a1a1a 100%); display: flex; align-items: center; justify-content: center; color: white; font-family: Inter, sans-serif; z-index: 9999;">
+				<div style="text-align: center; max-width: 400px; padding: 2rem;">
+					<h1 style="font-size: 2rem; margin-bottom: 1rem; color: #0ea5e9;">RaveTracker v3.0</h1>
+					<p style="margin-bottom: 1rem;">JavaScript is required to use RaveTracker.</p>
+					<p style="font-size: 0.9rem; opacity: 0.8;">Please enable JavaScript in your browser settings and refresh the page.</p>
+				</div>
+			</div>
+		</noscript>
+		
+		<!-- Main App Container -->
 		<div style="display: contents">%sveltekit.body%</div>
 	</body>
 </html>
