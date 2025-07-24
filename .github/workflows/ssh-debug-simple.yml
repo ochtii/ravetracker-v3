@@ -1,0 +1,96 @@
+name: SSH Debug Simple
+
+on:
+  workflow_dispatch:
+
+jobs:
+  check-secrets:
+    runs-on: ubuntu-latest
+    outputs:
+      has-host: ${{ steps.check.outputs.has-host }}
+    
+    steps:
+    - name: Check secrets
+      id: check
+      run: |
+        if [ -n "${{ secrets.HOST }}" ]; then
+          echo "has-host=true" >> $GITHUB_OUTPUT
+          echo "✅ HOST secret is configured"
+        else
+          echo "has-host=false" >> $GITHUB_OUTPUT
+          echo "❌ HOST secret is missing"
+        fi
+        
+        if [ -n "${{ secrets.USERNAME }}" ]; then
+          echo "✅ USERNAME secret is configured"
+        else
+          echo "❌ USERNAME secret is missing"
+        fi
+        
+        if [ -n "${{ secrets.SSH_KEY }}" ]; then
+          echo "✅ SSH_KEY secret is configured"
+        else
+          echo "❌ SSH_KEY secret is missing"
+        fi
+
+  test-ssh:
+    needs: check-secrets
+    runs-on: ubuntu-latest
+    if: needs.check-secrets.outputs.has-host == 'true'
+    
+    steps:
+    - name: SSH Connection Test
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.HOST }}
+        username: ${{ secrets.USERNAME }}
+        key: ${{ secrets.SSH_KEY }}
+        port: ${{ secrets.PORT || '22' }}
+        timeout: 30s
+        command_timeout: 15s
+        debug: true
+        script: |
+          echo "🎉 SSH Connection Successful!"
+          echo "Server: $(hostname)"
+          echo "User: $(whoami)"
+          echo "Time: $(date)"
+          
+          # Check/create RaveTracker directory
+          if [ ! -d "/var/www/ravetracker-v3" ]; then
+            sudo mkdir -p /var/www/ravetracker-v3
+            sudo chown $USER:$USER /var/www/ravetracker-v3
+            echo "✅ Created /var/www/ravetracker-v3"
+          else
+            echo "✅ /var/www/ravetracker-v3 exists"
+          fi
+
+  deploy-test:
+    needs: test-ssh
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Deploy temp_build
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.HOST }}
+        username: ${{ secrets.USERNAME }}
+        key: ${{ secrets.SSH_KEY }}
+        port: ${{ secrets.PORT || '22' }}
+        timeout: 120s
+        command_timeout: 60s
+        script: |
+          echo "🚀 Starting deployment..."
+          cd /var/www/ravetracker-v3
+          
+          if [ ! -d "temp_build" ]; then
+            git clone https://github.com/ochtii/ravetracker-v3.git temp_build
+            echo "✅ Repository cloned"
+          else
+            cd temp_build
+            git fetch origin main
+            git reset --hard origin/main
+            echo "✅ Repository updated"
+            cd ..
+          fi
+          
+          echo "🎉 Deployment completed!"

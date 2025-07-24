@@ -2,75 +2,50 @@ name: SSH Connection Troubleshooting
 
 on:
   workflow_dispatch:
-    inputs:
-      test_type:
-        description: 'Test type'
-        required: true
-        default: 'basic'
-        type: choice
-        options:
-        - basic
-        - secrets-check
-        - connection-test
-        - full-deploy
 
 jobs:
-  check-secrets:
+  check-configuration:
     runs-on: ubuntu-latest
     
     steps:
-    - name: Check Required Secrets
-      env:
-        HOST_SET: ${{ secrets.HOST != '' }}
-        USERNAME_SET: ${{ secrets.USERNAME != '' }}
-        SSH_KEY_SET: ${{ secrets.SSH_KEY != '' }}
-        PORT_SET: ${{ secrets.PORT != '' }}
+    - name: Check GitHub Secrets
       run: |
-        echo "🔍 Checking GitHub Secrets Configuration..."
-        echo "=========================================="
+        echo "🔍 Checking GitHub Secrets Configuration"
+        echo "========================================"
         
-        # Check if secrets are set (without revealing values)
-        if [ "$HOST_SET" = "false" ]; then
-          echo "❌ HOST secret is missing or empty"
-          echo "💡 Please set HOST in GitHub repository settings > Secrets and variables > Actions"
+        # Use length check instead of direct comparison
+        if [ ${#GITHUB_HOST} -eq 0 ]; then
+          echo "❌ HOST secret is missing"
         else
           echo "✅ HOST secret is configured"
         fi
         
-        if [ "$USERNAME_SET" = "false" ]; then
-          echo "❌ USERNAME secret is missing or empty"
-          echo "💡 Please set USERNAME in GitHub repository settings"
+        if [ ${#GITHUB_USERNAME} -eq 0 ]; then
+          echo "❌ USERNAME secret is missing"
         else
           echo "✅ USERNAME secret is configured"
         fi
         
-        if [ "$SSH_KEY_SET" = "false" ]; then
-          echo "❌ SSH_KEY secret is missing or empty"
-          echo "💡 Please set SSH_KEY in GitHub repository settings"
+        if [ ${#GITHUB_SSH_KEY} -eq 0 ]; then
+          echo "❌ SSH_KEY secret is missing"
         else
           echo "✅ SSH_KEY secret is configured"
         fi
         
-        if [ "$PORT_SET" = "false" ]; then
-          echo "⚠️ PORT secret not set (will default to 22)"
-        else
-          echo "✅ PORT secret is configured"
-        fi
-        
         echo ""
-        echo "📋 Required GitHub Secrets:"
-        echo "  - HOST: Your server IP address or domain name"
-        echo "  - USERNAME: SSH username (e.g., ubuntu, root, your-user)"
-        echo "  - SSH_KEY: Your private SSH key content"
-        echo "  - PORT: SSH port (optional, defaults to 22)"
+        echo "📋 To configure secrets:"
+        echo "Go to: https://github.com/ochtii/ravetracker-v3/settings/secrets/actions"
+      env:
+        GITHUB_HOST: ${{ secrets.HOST }}
+        GITHUB_USERNAME: ${{ secrets.USERNAME }}
+        GITHUB_SSH_KEY: ${{ secrets.SSH_KEY }}
 
   test-connection:
-    needs: check-secrets
+    needs: check-configuration
     runs-on: ubuntu-latest
     
     steps:
-    - name: Test Basic SSH Connection
-      if: ${{ secrets.HOST != '' }}
+    - name: Test SSH Connection
       uses: appleboy/ssh-action@v1.0.0
       with:
         host: ${{ secrets.HOST }}
@@ -87,35 +62,24 @@ jobs:
           echo "👤 User: $(whoami)"
           echo "📍 Directory: $(pwd)"
           echo "🕒 Time: $(date)"
-          echo "💾 Disk space:"
-          df -h /
-          echo ""
-          echo "🔍 Checking RaveTracker directory..."
-          if [ -d "/var/www/ravetracker-v3" ]; then
-            echo "✅ /var/www/ravetracker-v3 exists"
-            ls -la /var/www/ravetracker-v3/
-          else
-            echo "⚠️ /var/www/ravetracker-v3 does not exist"
-            echo "📁 Creating directory structure..."
+          
+          # Check RaveTracker directory
+          if [ ! -d "/var/www/ravetracker-v3" ]; then
+            echo "📁 Creating /var/www/ravetracker-v3..."
             sudo mkdir -p /var/www/ravetracker-v3
             sudo chown $USER:$USER /var/www/ravetracker-v3
             echo "✅ Directory created"
+          else
+            echo "✅ /var/www/ravetracker-v3 exists"
+            ls -la /var/www/ravetracker-v3/
           fi
-          
-    - name: Connection Failed
-      if: ${{ secrets.HOST == '' }}
-      run: |
-        echo "❌ Cannot test SSH connection - HOST secret is not configured"
-        echo "💡 Please configure all required secrets first"
 
   deploy-temp-build:
     needs: test-connection
     runs-on: ubuntu-latest
-    if: github.event.inputs.test_type == 'full-deploy'
     
     steps:
-    - name: Deploy temp_build
-      if: ${{ secrets.HOST != '' }}
+    - name: Deploy RaveTracker temp_build
       uses: appleboy/ssh-action@v1.0.0
       with:
         host: ${{ secrets.HOST }}
@@ -126,56 +90,32 @@ jobs:
         command_timeout: 60s
         debug: true
         script: |
-          echo "🚀 Starting RaveTracker v3.0 temp_build deployment..."
-          echo "===================================================="
+          echo "🚀 Starting RaveTracker v3.0 temp_build deployment"
+          echo "=================================================="
           
-          # Ensure directory exists
-          mkdir -p /var/www/ravetracker-v3
           cd /var/www/ravetracker-v3
           
-          # Check if auto-update script exists
-          if [ -f "auto-update-temp-build.sh" ]; then
-            echo "📋 Found auto-update script, using it..."
-            chmod +x auto-update-temp-build.sh
-            ./auto-update-temp-build.sh
+          if [ ! -d "temp_build" ]; then
+            echo "🔧 Cloning repository..."
+            git clone https://github.com/ochtii/ravetracker-v3.git temp_build
           else
-            echo "📁 No auto-update script found, performing manual update..."
-            
-            # Initialize or update temp_build
-            if [ ! -d "temp_build" ]; then
-              echo "🔧 Cloning repository..."
-              git clone https://github.com/ochtii/ravetracker-v3.git temp_build
-            else
-              echo "🔄 Updating existing temp_build..."
-              cd temp_build
-              git fetch origin main
-              git reset --hard origin/main
-              git clean -fd
-              cd ..
-            fi
-            
-            # Copy the auto-update script for future use
-            if [ -f "temp_build/auto-update-temp-build.sh" ]; then
-              cp temp_build/auto-update-temp-build.sh ./
-              chmod +x auto-update-temp-build.sh
-              echo "📋 Auto-update script installed for future deployments"
-            fi
-            
-            # Copy other deployment scripts
-            if [ -d "temp_build/scripts" ]; then
-              cp temp_build/scripts/*.sh ./ 2>/dev/null || echo "No additional scripts found"
-              chmod +x *.sh 2>/dev/null || echo "No shell scripts to make executable"
-            fi
+            echo "🔄 Updating repository..."
+            cd temp_build
+            git fetch origin main
+            git reset --hard origin/main
+            git clean -fd
+            cd ..
           fi
           
-          echo "✅ temp_build deployment completed successfully!"
-          echo "📊 Final status:"
-          echo "  - Repository: https://github.com/ochtii/ravetracker-v3"
+          # Copy auto-update script if available
+          if [ -f "temp_build/auto-update-temp-build.sh" ]; then
+            cp temp_build/auto-update-temp-build.sh ./
+            chmod +x auto-update-temp-build.sh
+            echo "📋 Auto-update script installed"
+          fi
+          
+          echo "✅ Deployment completed successfully!"
+          echo "📊 Status:"
+          echo "  - Repository: ochtii/ravetracker-v3"
           echo "  - Directory: /var/www/ravetracker-v3/temp_build"
           echo "  - Timestamp: $(date)"
-          
-          if [ -d "temp_build" ]; then
-            cd temp_build
-            echo "  - Current commit: $(git rev-parse --short HEAD)"
-            echo "  - Files updated: $(find . -name "*.js" -o -name "*.ts" -o -name "*.svelte" | wc -l) source files"
-          fi
