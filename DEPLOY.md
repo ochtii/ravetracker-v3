@@ -31,6 +31,8 @@ Das Smart Deploy System analysiert automatisch welche Dateien sich geändert hab
 ├── reset-local.bat              # Lokales Reset (Windows)
 ├── cleanup-server.sh            # Cleanup alte Deploy-Artifacts
 ├── quick-fix.sh                 # Schnelle Problembehebung
+├── setup-env.sh                 # Environment (.env) Setup
+├── server-setup.sh              # Komplette Server-Installation
 └── DEPLOY.md                    # Diese Dokumentation
 ```
 
@@ -83,6 +85,35 @@ reset-local.bat
 # Setze "Force full deployment" auf true
 ```
 
+## 🔧 Environment Management
+
+### Environment Setup (Erstmalig)
+
+```bash
+# Interaktive .env Konfiguration
+./setup-env.sh
+```
+
+### Environment überprüfen
+
+```bash
+# .env Datei anzeigen (ohne Secrets)
+cat .env | grep -E "^[^#]" | sed 's/=.*/=***/'
+
+# Supabase-Verbindung testen
+curl -H "apikey: YOUR_ANON_KEY" "YOUR_SUPABASE_URL/rest/v1/"
+```
+
+### Environment Backup
+
+Das Deploy-System bewahrt automatisch diese wichtigen Dateien:
+- `.env` - Hauptkonfiguration
+- `.env.local` - Lokale Overrides  
+- `.env.production` - Produktionsconfig
+- `uploads/` - User-Uploads
+- `ssl/` - SSL-Zertifikate
+- `logs/` - Anwendungslogs
+
 ## 🔧 Server Setup
 
 ### 1. Verzeichnisstruktur erstellen
@@ -92,7 +123,15 @@ sudo mkdir -p /var/www/ravetracker-v3
 sudo chown -R deploy:deploy /var/www/ravetracker-v3
 ```
 
-### 2. Deploy-Skript ausführbar machen
+### 2. Environment konfigurieren
+
+```bash
+cd /var/www/ravetracker-v3
+chmod +x setup-env.sh
+./setup-env.sh
+```
+
+### 3. Deploy-Skript ausführbar machen
 
 ```bash
 cd /var/www/ravetracker-v3
@@ -100,13 +139,13 @@ chmod +x smart-deploy.sh
 chmod +x rollback.sh
 ```
 
-### 3. PM2 installieren (falls noch nicht vorhanden)
+### 4. PM2 installieren (falls noch nicht vorhanden)
 
 ```bash
 npm install -g pm2
 ```
 
-### 4. Erstes Deployment
+### 5. Erstes Deployment
 
 ```bash
 # Manuell das erste Mal ausführen

@@ -94,8 +94,31 @@ if [ -d "$APP_PATH" ]; then
     success "Backup erstellt: $BACKUP_DIR"
 fi
 
+# Preserve important files
+log "🔒 Sichere wichtige Konfigurationsdateien..."
+TEMP_PRESERVE="/tmp/ravetracker-preserve-$(date +%Y%m%d_%H%M%S)"
+mkdir -p "$TEMP_PRESERVE"
+
+PRESERVE_FILES=(
+    ".env"
+    ".env.local" 
+    ".env.production"
+    "uploads"
+    "ssl"
+    "logs"
+)
+
+for file in "${PRESERVE_FILES[@]}"; do
+    if [ -e "$APP_PATH/$file" ]; then
+        log "   - Sichere: $file"
+        cp -r "$APP_PATH/$file" "$TEMP_PRESERVE/" 2>/dev/null || warning "Konnte $file nicht sichern"
+    fi
+done
+
+success "Wichtige Dateien gesichert in: $TEMP_PRESERVE"
+
 # Remove the entire application directory
-log "🗑️  Entferne komplettes Anwendungsverzeichnis..."
+log "🗑️  Entferne Anwendungsverzeichnis (ohne wichtige Dateien)..."
 if [ -d "$APP_PATH" ]; then
     rm -rf "$APP_PATH"
     success "Verzeichnis $APP_PATH entfernt"
@@ -105,6 +128,19 @@ fi
 log "📁 Erstelle neue Verzeichnisstruktur..."
 mkdir -p "$APP_PATH"
 mkdir -p "$APP_PATH/logs"
+
+# Restore preserved files
+log "🔄 Stelle wichtige Dateien wieder her..."
+for file in "${PRESERVE_FILES[@]}"; do
+    if [ -e "$TEMP_PRESERVE/$file" ]; then
+        log "   - Stelle wieder her: $file"
+        cp -r "$TEMP_PRESERVE/$file" "$APP_PATH/" 2>/dev/null || warning "Konnte $file nicht wiederherstellen"
+    fi
+done
+
+# Clean up temporary preserve directory
+rm -rf "$TEMP_PRESERVE"
+success "Wichtige Dateien wiederhergestellt"
 
 # Set correct ownership
 log "🔐 Setze Berechtigungen..."

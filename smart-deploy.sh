@@ -140,16 +140,49 @@ fi
 # Step 3: Copy environment and shared files
 log "🔗 Setting up environment and shared files..."
 
-# Copy .env file from current deployment if exists
-if [ -f "$CURRENT_PATH/.env" ]; then
-    cp "$CURRENT_PATH/.env" "$TEMP_PATH/.env"
-    log "   - Environment file copied"
+# Copy environment files from current deployment if exists
+ENV_FILES=(".env" ".env.local" ".env.production")
+for env_file in "${ENV_FILES[@]}"; do
+    if [ -f "$CURRENT_PATH/$env_file" ]; then
+        cp "$CURRENT_PATH/$env_file" "$TEMP_PATH/"
+        log "   - Environment file copied: $env_file"
+    fi
+done
+
+# If no .env found, check if there's one in the app directory root
+if [ ! -f "$TEMP_PATH/.env" ] && [ -f "$APP_PATH/.env" ]; then
+    cp "$APP_PATH/.env" "$TEMP_PATH/"
+    log "   - Environment file copied from app root"
 fi
 
-# Copy any persistent data directories
-if [ -d "$CURRENT_PATH/uploads" ]; then
-    cp -r "$CURRENT_PATH/uploads" "$TEMP_PATH/"
-    log "   - Uploads directory preserved"
+# Copy persistent data directories
+PERSISTENT_DIRS=("uploads" "ssl" "logs")
+for dir in "${PERSISTENT_DIRS[@]}"; do
+    if [ -d "$CURRENT_PATH/$dir" ]; then
+        cp -r "$CURRENT_PATH/$dir" "$TEMP_PATH/"
+        log "   - Persistent directory preserved: $dir"
+    fi
+done
+
+# Ensure .env exists (create template if missing)
+if [ ! -f "$TEMP_PATH/.env" ]; then
+    warning "No .env file found! Creating template..."
+    cat > "$TEMP_PATH/.env" << 'EOF'
+# RaveTracker v3.0 Environment Configuration
+# WICHTIG: Fügen Sie Ihre echten Supabase-Credentials ein
+
+# Supabase Configuration
+VITE_SUPABASE_URL=your_supabase_url_here
+VITE_SUPABASE_ANON_KEY=your_supabase_anon_key_here
+
+# Application Configuration
+NODE_ENV=production
+PORT=3000
+
+# Optional: Database Configuration
+# DATABASE_URL=your_database_url_here
+EOF
+    error "❌ .env Template erstellt! Bitte konfigurieren Sie Ihre Supabase-Credentials vor dem nächsten Deployment!"
 fi
 
 # Step 4: Build application if needed
