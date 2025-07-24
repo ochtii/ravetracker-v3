@@ -1,0 +1,269 @@
+name: Fix Deploy User Sudo
+
+on:
+  workflow_dispatch:
+    inputs:
+      fix_method:
+        description: 'Fix Method'
+        required: true
+        default: 'nginx-only'
+        type: choice
+        options:
+        - nginx-only
+        - sudo-fix
+        - both
+
+jobs:
+  sudo-diagnosis:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Diagnose Sudo Issue
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.HOST }}
+        username: ${{ secrets.USERNAME }}
+        key: ${{ secrets.SSH_KEY }}
+        port: ${{ secrets.PORT || '22' }}
+        timeout: 60s
+        command_timeout: 30s
+        script: |
+          echo "🔍 Sudo Diagnosis for deploy user"
+          echo "================================="
+          
+          echo "👤 Current user: $(whoami)"
+          echo "🆔 User ID: $(id)"
+          echo "🏠 Home directory: $HOME"
+          echo ""
+          
+          echo "🔑 Sudo configuration check:"
+          echo "Groups: $(groups)"
+          
+          # Check if user is in sudo group
+          if groups | grep -q sudo; then
+            echo "✅ User is in sudo group"
+          else
+            echo "❌ User is NOT in sudo group"
+          fi
+          
+          # Check sudo configuration files
+          echo ""
+          echo "📄 Checking sudo configuration..."
+          
+          # Try to check if password is required
+          echo "🧪 Testing sudo access..."
+          if sudo -n true 2>/dev/null; then
+            echo "✅ Passwordless sudo works!"
+          else
+            echo "❌ Passwordless sudo doesn't work"
+            echo "📋 Error details:"
+            sudo -n true 2>&1 || true
+          fi
+          
+          echo ""
+          echo "🔍 Available options:"
+          echo "1. Fix NGINX without sudo (user permissions)"
+          echo "2. Create sudo fix instructions"
+          echo "3. Use alternative deployment strategy"
+
+  nginx-user-fix:
+    runs-on: ubuntu-latest
+    needs: [sudo-diagnosis]
+    if: github.event.inputs.fix_method == 'nginx-only' || github.event.inputs.fix_method == 'both'
+    
+    steps:
+    - name: Fix NGINX Without Sudo
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.HOST }}
+        username: ${{ secrets.USERNAME }}
+        key: ${{ secrets.SSH_KEY }}
+        port: ${{ secrets.PORT || '22' }}
+        timeout: 120s
+        command_timeout: 60s
+        script: |
+          echo "🔧 NGINX Fix Without Sudo Access"
+          echo "================================"
+          
+          # Create corrected configuration in user space
+          echo "📝 Creating corrected NGINX configuration..."
+          
+          mkdir -p ~/nginx-fix
+          
+          cat > ~/nginx-fix/ravetracker-v3.conf << 'EOF'
+          server {
+              listen 80 default_server;
+              listen [::]:80 default_server;
+              
+              server_name _;
+              
+              # Logs
+              access_log /var/log/nginx/ravetracker-access.log;
+              error_log /var/log/nginx/ravetracker-error.log;
+              
+              # Root directory for static files
+              root /var/www/ravetracker-v3/temp_build;
+              index index.html index.htm;
+              
+              # Main location - try files first, then proxy
+              location / {
+                  try_files $uri $uri/ @proxy;
+              }
+              
+              # Proxy fallback
+              location @proxy {
+                  proxy_pass http://127.0.0.1:3000;
+                  proxy_http_version 1.1;
+                  proxy_set_header Upgrade $http_upgrade;
+                  proxy_set_header Connection 'upgrade';
+                  proxy_set_header Host $host;
+                  proxy_set_header X-Real-IP $remote_addr;
+                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto $scheme;
+                  proxy_cache_bypass $http_upgrade;
+                  
+                  # Timeouts
+                  proxy_connect_timeout 3s;
+                  proxy_send_timeout 3s;
+                  proxy_read_timeout 3s;
+              }
+              
+              # Static file caching - CORRECTED SYNTAX
+              location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
+                  expires 1y;
+                  add_header Cache-Control "public, max-age=31536000";
+                  access_log off;
+              }
+              
+              # Health check
+              location /health {
+                  access_log off;
+                  return 200 "RaveTracker v3.0 - OK\n";
+                  add_header Content-Type text/plain;
+              }
+              
+              # Security headers
+              add_header X-Frame-Options "SAMEORIGIN" always;
+              add_header X-XSS-Protection "1; mode=block" always;
+              add_header X-Content-Type-Options "nosniff" always;
+              add_header Referrer-Policy "no-referrer-when-downgrade" always;
+              
+              server_tokens off;
+              
+              # Gzip
+              gzip on;
+              gzip_vary on;
+              gzip_min_length 1024;
+              gzip_types
+                  application/javascript
+                  application/json
+                  application/xml
+                  text/css
+                  text/javascript
+                  text/xml
+                  text/plain;
+          }
+          EOF
+          
+          echo "✅ Corrected configuration created"
+          
+          # Create installation script
+          cat > ~/nginx-fix/install.sh << 'EOF'
+          #!/bin/bash
+          
+          echo "🔧 Installing NGINX fix..."
+          
+          # Backup current config
+          if [ -f "/etc/nginx/sites-available/ravetracker-v3" ]; then
+            sudo cp /etc/nginx/sites-available/ravetracker-v3 /etc/nginx/sites-available/ravetracker-v3.backup.$(date +%Y%m%d_%H%M%S)
+            echo "✅ Backup created"
+          fi
+          
+          # Install new config
+          sudo cp ~/nginx-fix/ravetracker-v3.conf /etc/nginx/sites-available/ravetracker-v3
+          
+          # Test and reload
+          if sudo nginx -t; then
+            echo "✅ Configuration test passed"
+            sudo systemctl reload nginx
+            echo "✅ NGINX reloaded"
+            
+            # Test HTTP response
+            sleep 2
+            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost/health || echo "000")
+            echo "📊 Health check response: $HTTP_CODE"
+            
+          else
+            echo "❌ Configuration test failed"
+            exit 1
+          fi
+          EOF
+          
+          chmod +x ~/nginx-fix/install.sh
+          
+          echo ""
+          echo "🎯 NGINX Fix Package Created!"
+          echo "============================="
+          echo "📁 Location: ~/nginx-fix/"
+          echo "📄 Config: ~/nginx-fix/ravetracker-v3.conf"
+          echo "📜 Installer: ~/nginx-fix/install.sh"
+          echo ""
+          echo "🚀 To install (requires sudo access):"
+          echo "bash ~/nginx-fix/install.sh"
+          echo ""
+          echo "🔍 Key fixes:"
+          echo "- Removed problematic 'must-revalidate' directive"
+          echo "- Corrected Cache-Control header syntax"
+          echo "- Improved static file serving"
+          echo "- Added proper fallback handling"
+          
+          # Show the difference
+          echo ""
+          echo "📋 Configuration summary:"
+          echo "- Static files served directly from /var/www/ravetracker-v3/temp_build"
+          echo "- Proxy fallback to Node.js app on port 3000"
+          echo "- Proper cache headers for static assets"
+          echo "- Health check endpoint at /health"
+
+  create-instructions:
+    runs-on: ubuntu-latest
+    needs: [nginx-user-fix]
+    if: always()
+    
+    steps:
+    - name: Create Fix Instructions
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.HOST }}
+        username: ${{ secrets.USERNAME }}
+        key: ${{ secrets.SSH_KEY }}
+        port: ${{ secrets.PORT || '22' }}
+        timeout: 30s
+        command_timeout: 15s
+        script: |
+          echo "📋 Final Instructions"
+          echo "===================="
+          echo ""
+          echo "🎯 Current Status:"
+          echo "- NGINX configuration fix is ready in ~/nginx-fix/"
+          echo "- Deploy user needs sudo access to apply the fix"
+          echo ""
+          echo "🔧 To apply the NGINX fix:"
+          echo "1. Run: bash ~/nginx-fix/install.sh"
+          echo "2. Or manually: sudo cp ~/nginx-fix/ravetracker-v3.conf /etc/nginx/sites-available/ravetracker-v3"
+          echo "3. Test: sudo nginx -t"
+          echo "4. Reload: sudo systemctl reload nginx"
+          echo ""
+          echo "🌐 After successful fix:"
+          echo "- Access RaveTracker at: http://$(hostname -I | awk '{print $1}')"
+          echo "- Health check: http://$(hostname -I | awk '{print $1}')/health"
+          echo ""
+          echo "🚀 Next steps:"
+          echo "1. Fix NGINX configuration (above)"
+          echo "2. Deploy RaveTracker application"
+          echo "3. Start SvelteKit server on port 3000"
+          echo ""
+          echo "📞 If sudo access is unavailable:"
+          echo "- Contact system administrator"
+          echo "- Request passwordless sudo for deploy user"
+          echo "- Or provide root access for configuration"
