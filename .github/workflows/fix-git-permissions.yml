@@ -1,0 +1,351 @@
+name: Fix Git Permissions
+
+on:
+  workflow_dispatch:
+    inputs:
+      fix_type:
+        description: 'Fix Type'
+        required: true
+        default: 'permissions'
+        type: choice
+        options:
+        - permissions
+        - ownership
+        - reinit-git
+        - full-fix
+
+jobs:
+  diagnose-git:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Diagnose Git Permission Issues
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.HOST }}
+        username: ${{ secrets.USERNAME }}
+        key: ${{ secrets.SSH_KEY }}
+        port: ${{ secrets.PORT || '22' }}
+        timeout: 120s
+        command_timeout: 60s
+        script: |
+          echo "🔍 Diagnosing Git Permission Issues"
+          echo "==================================="
+          echo "📅 $(date)"
+          echo "👤 User: $(whoami)"
+          echo "🆔 User ID: $(id)"
+          echo ""
+          
+          # Check current directory
+          PROJECT_DIR="/var/www/ravetracker-v3"
+          echo "📁 Project Directory: $PROJECT_DIR"
+          
+          if [ -d "$PROJECT_DIR" ]; then
+            cd "$PROJECT_DIR"
+            echo "✅ Changed to project directory"
+            echo "📋 Current directory: $(pwd)"
+          else
+            echo "❌ Project directory not found"
+            exit 1
+          fi
+          
+          # Check .git directory permissions
+          echo ""
+          echo "🔍 Git Directory Analysis:"
+          if [ -d ".git" ]; then
+            echo "✅ .git directory exists"
+            echo "📊 .git directory permissions:"
+            ls -la .git/ | head -10
+            echo ""
+            echo "🔒 .git directory ownership:"
+            ls -ld .git/
+            echo ""
+            echo "📄 FETCH_HEAD file status:"
+            if [ -f ".git/FETCH_HEAD" ]; then
+              ls -la .git/FETCH_HEAD
+            else
+              echo "FETCH_HEAD does not exist"
+            fi
+          else
+            echo "❌ .git directory not found"
+          fi
+          
+          # Check project directory ownership
+          echo ""
+          echo "📁 Project Directory Ownership:"
+          ls -la /var/www/ | grep ravetracker || echo "No ravetracker directory found"
+          
+          # Check user groups
+          echo ""
+          echo "👥 User Groups:"
+          groups
+          
+          # Check if user can write to the directory
+          echo ""
+          echo "✍️ Write Test:"
+          if touch test_write_permissions.tmp 2>/dev/null; then
+            echo "✅ Can write to project directory"
+            rm -f test_write_permissions.tmp
+          else
+            echo "❌ Cannot write to project directory"
+          fi
+          
+          # Git status
+          echo ""
+          echo "📊 Git Status:"
+          git status --porcelain 2>/dev/null || echo "Cannot run git status"
+
+  fix-permissions:
+    runs-on: ubuntu-latest
+    needs: [diagnose-git]
+    if: github.event.inputs.fix_type == 'permissions' || github.event.inputs.fix_type == 'full-fix'
+    
+    steps:
+    - name: Fix Git Permissions
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.HOST }}
+        username: ${{ secrets.USERNAME }}
+        key: ${{ secrets.SSH_KEY }}
+        port: ${{ secrets.PORT || '22' }}
+        timeout: 120s
+        command_timeout: 60s
+        script: |
+          echo "🔧 Fixing Git Permissions"
+          echo "========================="
+          
+          # Create permission fix script
+          cat > ~/fix_git_permissions.sh << 'EOF'
+          #!/bin/bash
+          
+          echo "🔧 Fixing Git permissions for deploy user"
+          echo "========================================="
+          
+          PROJECT_DIR="/var/www/ravetracker-v3"
+          
+          if [ ! -d "$PROJECT_DIR" ]; then
+            echo "❌ Project directory not found: $PROJECT_DIR"
+            exit 1
+          fi
+          
+          cd "$PROJECT_DIR"
+          
+          # Fix ownership of entire project directory
+          echo "👤 Setting ownership to deploy:deploy..."
+          sudo chown -R deploy:deploy "$PROJECT_DIR"
+          
+          # Fix permissions on project directory
+          echo "🔒 Setting directory permissions..."
+          sudo chmod -R 755 "$PROJECT_DIR"
+          
+          # Special handling for .git directory
+          if [ -d ".git" ]; then
+            echo "📁 Fixing .git directory permissions..."
+            sudo chown -R deploy:deploy .git/
+            sudo chmod -R 755 .git/
+            
+            # Make sure git files are writable by owner
+            sudo find .git/ -type f -exec chmod 644 {} \;
+            sudo find .git/ -type d -exec chmod 755 {} \;
+            
+            # Fix specific git files that need write access
+            sudo chmod 664 .git/FETCH_HEAD 2>/dev/null || echo "FETCH_HEAD does not exist yet"
+            sudo chmod 664 .git/HEAD 2>/dev/null || echo "HEAD file issue"
+            sudo chmod -R 755 .git/refs/ 2>/dev/null || echo "refs directory issue"
+            sudo chmod -R 755 .git/objects/ 2>/dev/null || echo "objects directory issue"
+            
+            echo "✅ Git permissions fixed"
+          else
+            echo "⚠️ No .git directory found"
+          fi
+          
+          # Test git operations
+          echo ""
+          echo "🧪 Testing git operations..."
+          if git status >/dev/null 2>&1; then
+            echo "✅ git status works"
+          else
+            echo "❌ git status failed"
+          fi
+          
+          if git fetch --dry-run origin main >/dev/null 2>&1; then
+            echo "✅ git fetch test passed"
+          else
+            echo "⚠️ git fetch test failed (may need network access)"
+          fi
+          
+          echo ""
+          echo "📊 Current permissions:"
+          ls -la .git/ | head -5
+          
+          echo ""
+          echo "✅ Permission fix completed"
+          EOF
+          
+          chmod +x ~/fix_git_permissions.sh
+          echo "✅ Permission fix script created: ~/fix_git_permissions.sh"
+          
+          echo ""
+          echo "🚀 To fix git permissions:"
+          echo "bash ~/fix_git_permissions.sh"
+
+  reinit-git:
+    runs-on: ubuntu-latest
+    needs: [diagnose-git]
+    if: github.event.inputs.fix_type == 'reinit-git' || github.event.inputs.fix_type == 'full-fix'
+    
+    steps:
+    - name: Reinitialize Git Repository
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.HOST }}
+        username: ${{ secrets.USERNAME }}
+        key: ${{ secrets.SSH_KEY }}
+        port: ${{ secrets.PORT || '22' }}
+        timeout: 120s
+        command_timeout: 60s
+        script: |
+          echo "🔄 Reinitialize Git Repository"
+          echo "=============================="
+          
+          # Create git reinit script
+          cat > ~/reinit_git.sh << 'EOF'
+          #!/bin/bash
+          
+          echo "🔄 Reinitializing Git repository"
+          echo "==============================="
+          
+          PROJECT_DIR="/var/www/ravetracker-v3"
+          
+          if [ ! -d "$PROJECT_DIR" ]; then
+            echo "❌ Project directory not found: $PROJECT_DIR"
+            exit 1
+          fi
+          
+          cd "$PROJECT_DIR"
+          
+          # Backup current .git if it exists
+          if [ -d ".git" ]; then
+            echo "💾 Backing up current .git directory..."
+            sudo mv .git .git.backup.$(date +%Y%m%d_%H%M%S)
+            echo "✅ Backup created"
+          fi
+          
+          # Initialize new git repository
+          echo "🔧 Initializing new git repository..."
+          git init
+          
+          # Add remote
+          echo "🌐 Adding remote origin..."
+          git remote add origin https://github.com/ochtii/ravetracker-v3.git
+          
+          # Fetch from remote
+          echo "📥 Fetching from remote..."
+          git fetch origin main
+          
+          # Reset to remote main
+          echo "🔄 Resetting to remote main..."
+          git reset --hard origin/main
+          
+          # Set up branch tracking
+          git branch --set-upstream-to=origin/main main
+          
+          # Fix ownership
+          echo "👤 Setting proper ownership..."
+          sudo chown -R deploy:deploy .git/
+          
+          # Test git operations
+          echo ""
+          echo "🧪 Testing git operations..."
+          echo "📊 Git status:"
+          git status
+          
+          echo ""
+          echo "🎉 Git repository reinitialized successfully!"
+          echo "✅ Ready for git pull/push operations"
+          EOF
+          
+          chmod +x ~/reinit_git.sh
+          echo "✅ Git reinit script created: ~/reinit_git.sh"
+          
+          echo ""
+          echo "🚀 To reinitialize git:"
+          echo "bash ~/reinit_git.sh"
+
+  test-git-fix:
+    runs-on: ubuntu-latest
+    needs: [fix-permissions, reinit-git]
+    if: always()
+    
+    steps:
+    - name: Test Git Operations
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.HOST }}
+        username: ${{ secrets.USERNAME }}
+        key: ${{ secrets.SSH_KEY }}
+        port: ${{ secrets.PORT || '22' }}
+        timeout: 60s
+        command_timeout: 30s
+        script: |
+          echo "🧪 Testing Git Operations"
+          echo "========================"
+          
+          PROJECT_DIR="/var/www/ravetracker-v3"
+          
+          if [ -d "$PROJECT_DIR" ]; then
+            cd "$PROJECT_DIR"
+            echo "✅ In project directory: $(pwd)"
+          else
+            echo "❌ Project directory not found"
+            exit 1
+          fi
+          
+          # Test git status
+          echo ""
+          echo "1. Testing git status:"
+          if git status >/dev/null 2>&1; then
+            echo "   ✅ git status works"
+            git status --porcelain | head -5
+          else
+            echo "   ❌ git status failed"
+          fi
+          
+          # Test git fetch
+          echo ""
+          echo "2. Testing git fetch:"
+          if git fetch origin main >/dev/null 2>&1; then
+            echo "   ✅ git fetch works"
+          else
+            echo "   ❌ git fetch failed"
+            echo "   📄 Error details:"
+            git fetch origin main 2>&1 | tail -3
+          fi
+          
+          # Test git pull
+          echo ""
+          echo "3. Testing git pull:"
+          if git pull origin main >/dev/null 2>&1; then
+            echo "   ✅ git pull works"
+          else
+            echo "   ⚠️ git pull had issues (may be normal if no changes)"
+            git pull origin main 2>&1 | tail -3
+          fi
+          
+          # Show current git info
+          echo ""
+          echo "📊 Git Repository Info:"
+          echo "- Branch: $(git branch --show-current 2>/dev/null || echo 'unknown')"
+          echo "- Remote: $(git remote get-url origin 2>/dev/null || echo 'not set')"
+          echo "- Last commit: $(git log -1 --oneline 2>/dev/null || echo 'no commits')"
+          
+          # Show available scripts
+          echo ""
+          echo "📋 Available fix scripts:"
+          ls -la ~/*git* ~/fix* 2>/dev/null | grep -E "\.(sh)$" || echo "No scripts found"
+          
+          echo ""
+          echo "🎯 If git still has issues:"
+          echo "1. Run: bash ~/fix_git_permissions.sh"
+          echo "2. Or run: bash ~/reinit_git.sh"
+          echo "3. Then test: git pull origin main"
