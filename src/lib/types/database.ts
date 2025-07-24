@@ -36,6 +36,8 @@ export interface Database {
           bio: string | null
           avatar_url: string | null
           birth_date: string | null
+          website: string | null
+          location: string | null
           favorite_genres: string[]
           location_city: string | null
           location_country: string | null
@@ -55,6 +57,8 @@ export interface Database {
           bio?: string | null
           avatar_url?: string | null
           birth_date?: string | null
+          website?: string | null
+          location?: string | null
           favorite_genres?: string[]
           location_city?: string | null
           location_country?: string | null
@@ -74,6 +78,8 @@ export interface Database {
           bio?: string | null
           avatar_url?: string | null
           birth_date?: string | null
+          website?: string | null
+          location?: string | null
           favorite_genres?: string[]
           location_city?: string | null
           location_country?: string | null
@@ -161,8 +167,15 @@ export interface Database {
           view_count: number
           like_count: number
           share_count: number
+          going_count: number
+          interested_count: number
           ticket_url: string | null
           website_url: string | null
+          facebook_url: string | null
+          instagram_url: string | null
+          cover_image_url: string | null
+          images: string[]
+          dress_code: string | null
           social_links: Json
           created_at: string
           updated_at: string
@@ -198,8 +211,15 @@ export interface Database {
           view_count?: number
           like_count?: number
           share_count?: number
+          going_count?: number
+          interested_count?: number
           ticket_url?: string | null
           website_url?: string | null
+          facebook_url?: string | null
+          instagram_url?: string | null
+          cover_image_url?: string | null
+          images?: string[]
+          dress_code?: string | null
           social_links?: Json
           created_at?: string
           updated_at?: string
@@ -235,8 +255,15 @@ export interface Database {
           view_count?: number
           like_count?: number
           share_count?: number
+          going_count?: number
+          interested_count?: number
           ticket_url?: string | null
           website_url?: string | null
+          facebook_url?: string | null
+          instagram_url?: string | null
+          cover_image_url?: string | null
+          images?: string[]
+          dress_code?: string | null
           social_links?: Json
           created_at?: string
           updated_at?: string

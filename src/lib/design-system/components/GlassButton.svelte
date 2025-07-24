@@ -6,7 +6,7 @@
 
 <script lang="ts">
   import type { GlassButtonProps } from './types.js';
-  import { cn, getSizeClasses, getColorClasses } from './types.js';
+  import { cn } from './types.js';
 
   type $$Props = GlassButtonProps & {
     [key: string]: any;
@@ -58,10 +58,10 @@
     'focus:ring-offset-transparent',
     
     // Variant styles
-    variantClasses[variant],
+    variantClasses[variant || 'primary'],
     
     // Size styles
-    sizeClasses[size],
+    sizeClasses[size || 'md'],
     
     // States
     fullWidth && 'w-full',

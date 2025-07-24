@@ -54,7 +54,7 @@
     // Glassmorphism
     glassmorphism.modal,
     // Size styles
-    getSizeClasses(size),
+    getSizeClasses(size || 'md'),
     // Animation
     open ? animations.scaleIn : animations.scaleOut,
     // Custom class

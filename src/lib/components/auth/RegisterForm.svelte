@@ -56,9 +56,9 @@
       }
 
       const result = await authActions.signUp(formData.email, formData.password, {
-        firstName: formData.firstName,
-        lastName: formData.lastName,
-        username: formData.username
+        ...(formData.firstName && { first_name: formData.firstName }),
+        ...(formData.lastName && { last_name: formData.lastName }),
+        ...(formData.username && { username: formData.username })
       })
       
       if (result) {
@@ -103,11 +103,7 @@
         password: formData.password,
         confirmPassword: formData.confirmPassword
       }
-      const validation = validateForm(registerSchema.pick({ 
-        email: true, 
-        password: true, 
-        confirmPassword: true 
-      }), stepData)
+      const validation = validateForm(registerSchema, stepData)
       
       if (!validation.success) {
         errors = validation.errors || {}

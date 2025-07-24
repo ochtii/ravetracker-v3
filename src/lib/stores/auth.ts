@@ -338,11 +338,52 @@ export const authActions = {
       }
 
       profile.set(profileData)
-      return { data: { url: publicUrl, profile: profileData }, error: null }
+      return publicUrl
     } catch (err) {
       console.error('Upload avatar error:', err)
       error.set(err as AuthError)
-      return { data: null, error: err as AuthError }
+      throw err
+    } finally {
+      loading.set(false)
+    }
+  },
+
+  // Delete user account
+  deleteAccount: async () => {
+    const currentUser = get(user)
+    if (!currentUser) {
+      throw new Error('User not authenticated')
+    }
+
+    loading.set(true)
+    error.set(null)
+
+    try {
+      // First delete user profile
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .delete()
+        .eq('user_id', currentUser.id)
+
+      if (profileError) {
+        console.warn('Profile deletion error:', profileError)
+      }
+
+      // Delete user account (this requires RLS policies and might need admin auth)
+      const { error: deleteError } = await supabase.auth.admin.deleteUser(currentUser.id)
+      
+      if (deleteError) {
+        throw deleteError
+      }
+
+      // Clear auth state
+      clearAuthState()
+      
+      return { data: null, error: null }
+    } catch (err) {
+      console.error('Delete account error:', err)
+      error.set(err as AuthError)
+      throw err
     } finally {
       loading.set(false)
     }

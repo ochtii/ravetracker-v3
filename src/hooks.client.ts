@@ -2,6 +2,11 @@ import type { HandleClientError } from '@sveltejs/kit'
 import { supabase } from '$lib/utils/supabase'
 import { browser } from '$app/environment'
 
+// Export an init function
+export const init = () => {
+  console.log('RaveTracker v3.0 client initialized')
+}
+
 // Protected routes that require authentication
 const protectedRoutes = [
   '/dashboard',

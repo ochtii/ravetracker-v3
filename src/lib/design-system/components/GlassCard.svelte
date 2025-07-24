@@ -51,10 +51,10 @@
     getGlassClasses(variant),
     
     // Padding
-    paddingClasses[padding],
+    paddingClasses[padding || 'md'],
     
     // Rounded
-    roundedClasses[rounded],
+    roundedClasses[rounded || 'lg'],
     
     // Interactive states
     hover && 'hover:shadow-xl hover:scale-[1.02] hover:backdrop-blur-lg',

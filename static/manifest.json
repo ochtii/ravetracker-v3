@@ -1,0 +1,16 @@
+{
+  "name": "RaveTracker v3.0",
+  "short_name": "RaveTracker",
+  "description": "Die ultimative Plattform für Rave & Electronic Music Events",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0a0a",
+  "theme_color": "#8b5cf6",
+  "icons": [
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    }
+  ]
+}

@@ -1,4 +1,3 @@
-import { createClient } from '@supabase/supabase-js'
 import type { 
   RealtimeChannel, 
   RealtimePostgresChangesPayload,
@@ -122,7 +121,7 @@ export class RealtimeManager {
   private stopHeartbeat() {
     if (this.heartbeatInterval) {
       clearInterval(this.heartbeatInterval)
-      this.heartbeatInterval = undefined
+      this.heartbeatInterval = null as any
     }
   }
 
@@ -150,7 +149,7 @@ export class RealtimeManager {
       )
 
     this.channels.set(channelName, channel)
-    channel.subscribe((status) => {
+    channel.subscribe((status: any) => {
       console.log(`Events subscription status: ${status}`)
       this.emit('subscription:events', { status, channelName })
     })

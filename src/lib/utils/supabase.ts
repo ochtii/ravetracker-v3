@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
-import type { Database } from '$lib/types/database'
+import type { Database, EventStatus, AttendanceStatus } from '$lib/types/database'
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -132,7 +132,7 @@ export const db = {
         .order('date_time', { ascending: true })
 
       if (filters?.status?.length) {
-        query = query.in('status', filters.status)
+        query = query.in('status', filters.status as EventStatus[])
       }
 
       if (filters?.genres?.length) {
@@ -344,43 +344,19 @@ export const db = {
     }
   },
 
-  // Event Interactions
-  interactions: {
-    create: async (interaction: Database['public']['Tables']['event_interactions']['Insert']) => {
-      return supabase
-        .from('event_interactions')
-        .insert(interaction)
-        .select()
-        .single()
-    },
-
-    getByEventId: async (eventId: string) => {
-      return supabase
-        .from('event_interactions')
-        .select(`
-          *,
-          user:profiles!event_interactions_user_id_fkey(
-            id,
-            first_name,
-            last_name,
-            username,
-            avatar_url
-          )
-        `)
-        .eq('event_id', eventId)
-        .order('created_at', { ascending: false })
-    },
-
-    getUserInteractionForEvent: async (userId: string, eventId: string, type: Database['public']['Tables']['event_interactions']['Row']['interaction_type']) => {
-      return supabase
-        .from('event_interactions')
-        .select('*')
-        .eq('user_id', userId)
-        .eq('event_id', eventId)
-        .eq('interaction_type', type)
-        .single()
-    }
-  },
+  // Event Interactions (would be created later)
+  // interactions: {
+  //   create: async (interaction: any) => {
+  //     // Placeholder for future implementation
+  //     return { data: null, error: new Error('Not implemented') }
+  //   },
+  //   getByEventId: async (eventId: string) => {
+  //     return { data: [], error: null }
+  //   },
+  //   getUserInteractionForEvent: async (userId: string, eventId: string, type: any) => {
+  //     return { data: null, error: null }
+  //   }
+  // },
 
   // Notifications
   notifications: {

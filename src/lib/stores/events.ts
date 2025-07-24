@@ -538,6 +538,135 @@ export const eventActions = {
     eventActions.loadEvents(true)
   },
 
+  // Load more events (infinite scroll)
+  loadMore: async () => {
+    const currentPagination = get(pagination)
+    if (!currentPagination.hasMore) return
+    
+    return eventActions.loadEvents(false)
+  },
+
+  // Refresh events
+  refreshEvents: async () => {
+    return eventActions.loadEvents(true)
+  },
+
+  // Reset filters
+  resetFilters: () => {
+    eventActions.clearFilters()
+  },
+
+  // Load single event
+  loadEvent: async (eventId: string) => {
+    try {
+      loading.set(true)
+      const event = await eventActions.getEvent(eventId)
+      if (event) {
+        currentEvent.set(event)
+      }
+    } catch (err) {
+      console.error('Load event error:', err)
+      error.set(err instanceof Error ? err.message : 'Failed to load event')
+    } finally {
+      loading.set(false)
+    }
+  },
+
+  // Join event (attendance)
+  joinEvent: async (eventId: string) => {
+    const currentUser = get(user)
+    if (!currentUser) throw new Error('User not authenticated')
+
+    try {
+      const { data, error: dbError } = await db.attendance.updateStatus(currentUser.id, eventId, 'going')
+
+      if (dbError) {
+        throw new Error(handleSupabaseError(dbError))
+      }
+
+      return { data, error: null }
+    } catch (err) {
+      console.error('Join event error:', err)
+      throw err
+    }
+  },
+
+  // Leave event
+  leaveEvent: async (eventId: string) => {
+    const currentUser = get(user)
+    if (!currentUser) throw new Error('User not authenticated')
+
+    try {
+      const { data, error: dbError } = await db.attendance.remove(currentUser.id, eventId)
+
+      if (dbError) {
+        throw new Error(handleSupabaseError(dbError))
+      }
+
+      return { data, error: null }
+    } catch (err) {
+      console.error('Leave event error:', err)
+      throw err
+    }
+  },
+
+  // Show interest in event
+  showInterest: async (eventId: string) => {
+    const currentUser = get(user)
+    if (!currentUser) throw new Error('User not authenticated')
+
+    try {
+      const { data, error: dbError } = await db.attendance.updateStatus(currentUser.id, eventId, 'interested')
+
+      if (dbError) {
+        throw new Error(handleSupabaseError(dbError))
+      }
+
+      return { data, error: null }
+    } catch (err) {
+      console.error('Show interest error:', err)
+      throw err
+    }
+  },
+
+  // Remove interest
+  removeInterest: async (eventId: string) => {
+    const currentUser = get(user)
+    if (!currentUser) throw new Error('User not authenticated')
+
+    try {
+      const { data, error: dbError } = await db.attendance.remove(currentUser.id, eventId)
+
+      if (dbError) {
+        throw new Error(handleSupabaseError(dbError))
+      }
+
+      return { data, error: null }
+    } catch (err) {
+      console.error('Remove interest error:', err)
+      throw err
+    }
+  },
+
+  // Get user attendance status
+  getUserAttendance: async (eventId: string) => {
+    const currentUser = get(user)
+    if (!currentUser) return { data: null, error: null }
+
+    try {
+      const { data, error: dbError } = await db.attendance.getUserAttendanceForEvent(currentUser.id, eventId)
+
+      if (dbError) {
+        throw new Error(handleSupabaseError(dbError))
+      }
+
+      return { data, error: null }
+    } catch (err) {
+      console.error('Get user attendance error:', err)
+      return { data: null, error: err instanceof Error ? err.message : 'Failed to get attendance' }
+    }
+  },
+
   // Clear error
   clearError: () => {
     error.set(null)
@@ -579,7 +708,7 @@ export const eventStats = derived(
     total: $events.length,
     published: $events.filter(e => e.status === 'published').length,
     upcoming: $events.filter(e => new Date(e.date_time) > new Date()).length,
-    free: $events.filter(e => e.price === 0).length,
-    paid: $events.filter(e => e.price > 0).length
+    free: $events.filter(e => e.price_min === 0).length,
+    paid: $events.filter(e => e.price_min > 0).length
   })
 )

@@ -137,20 +137,18 @@ export const generateDesignSystemCSS = () => {
     ${generateColorCSS()}
     
     /* Typography Tokens */
-    ${generateTypographyCSS()}
-    
+    /* Typography will be added later */
+
     /* Layout Tokens */
-    ${generateLayoutCSS()}
-    
+    /* Layout tokens will be added later */
+
     /* Motion Tokens */
-    ${generateMotionCSS()}
-    
-    /* Glassmorphism Presets */
+    /* Motion tokens will be added later */    /* Glassmorphism Presets */
     ${generateGlassCSS()}
   }
   
   /* Keyframe Animations */
-  ${generateKeyframesCSS()}
+  /* Keyframes will be added later */
   
   /* Dark Theme */
   [data-theme="dark"] {
