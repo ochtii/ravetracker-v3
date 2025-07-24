@@ -1,0 +1,80 @@
+name: SSH Username Discovery
+
+on:
+  workflow_dispatch:
+    inputs:
+      host:
+        description: 'Server IP or hostname'
+        required: true
+        type: string
+      port:
+        description: 'SSH Port (default: 22)'
+        required: false
+        default: '22'
+        type: string
+
+jobs:
+  discover-username:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        username: ['ubuntu', 'root', 'debian', 'admin', 'ec2-user', 'centos', 'azureuser']
+      fail-fast: false
+    
+    steps:
+    - name: Test SSH with ${{ matrix.username }}
+      continue-on-error: true
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ github.event.inputs.host }}
+        username: ${{ matrix.username }}
+        key: ${{ secrets.SSH_KEY }}
+        port: ${{ github.event.inputs.port }}
+        timeout: 15s
+        command_timeout: 10s
+        script: |
+          echo "🎉 SUCCESS: Connected with username '${{ matrix.username }}'"
+          echo "=================================="
+          echo "Server: $(hostname)"
+          echo "User: $(whoami)"
+          echo "Home: $HOME"
+          echo "ID: $(id)"
+          echo "Groups: $(groups)"
+          echo "Sudo access: $(sudo -n true 2>/dev/null && echo 'YES' || echo 'NO')"
+          echo "OS: $(cat /etc/os-release 2>/dev/null | grep PRETTY_NAME | cut -d'=' -f2 | tr -d '\"' || uname -s)"
+          
+    - name: Log result for ${{ matrix.username }}
+      if: always()
+      run: |
+        if [ "${{ steps.test-ssh.outcome }}" = "success" ]; then
+          echo "✅ SUCCESS: ${{ matrix.username }} works!"
+          echo "::notice::SSH connection successful with username: ${{ matrix.username }}"
+        else
+          echo "❌ FAILED: ${{ matrix.username }} didn't work"
+        fi
+
+  summary:
+    needs: discover-username
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+    - name: Username Discovery Summary
+      run: |
+        echo "🎯 SSH Username Discovery Results"
+        echo "================================"
+        echo "Host: ${{ github.event.inputs.host }}"
+        echo "Port: ${{ github.event.inputs.port }}"
+        echo ""
+        echo "📊 Tested usernames:"
+        echo "- ubuntu: ${{ contains(needs.discover-username.result, 'success') && '✅' || '❌' }}"
+        echo "- root: ${{ contains(needs.discover-username.result, 'success') && '✅' || '❌' }}"
+        echo "- debian: ${{ contains(needs.discover-username.result, 'success') && '✅' || '❌' }}"
+        echo "- admin: ${{ contains(needs.discover-username.result, 'success') && '✅' || '❌' }}"
+        echo "- ec2-user: ${{ contains(needs.discover-username.result, 'success') && '✅' || '❌' }}"
+        echo "- centos: ${{ contains(needs.discover-username.result, 'success') && '✅' || '❌' }}"
+        echo "- azureuser: ${{ contains(needs.discover-username.result, 'success') && '✅' || '❌' }}"
+        echo ""
+        echo "💡 Check the individual job logs above to see which username worked!"
+        echo "🔧 Update your GitHub USERNAME secret with the working username"
