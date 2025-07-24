@@ -27,6 +27,10 @@ Das Smart Deploy System analysiert automatisch welche Dateien sich geändert hab
 ├── smart-deploy.sh              # Server-seitiges Deploy-Skript
 ├── deploy-local.sh              # Lokales Deploy-Skript
 ├── rollback.sh                  # Rollback-Skript
+├── reset-server.sh              # Server komplett zurücksetzen
+├── reset-local.bat              # Lokales Reset (Windows)
+├── cleanup-server.sh            # Cleanup alte Deploy-Artifacts
+├── quick-fix.sh                 # Schnelle Problembehebung
 └── DEPLOY.md                    # Diese Dokumentation
 ```
 
@@ -55,6 +59,20 @@ Das GitHub Actions Workflow wird automatisch ausgelöst und führt ein intellige
 ```bash
 # Auf dem Server ausführen
 ./rollback.sh
+```
+
+### Server komplett zurücksetzen
+
+```bash
+# Kompletter Reset des Server-Verzeichnisses
+./reset-server.sh
+```
+
+### Lokalen Entwicklungsstand zurücksetzen
+
+```batch
+REM Auf Windows (lokale Entwicklung)
+reset-local.bat
 ```
 
 ### Force Full Deployment
@@ -156,6 +174,27 @@ curl http://localhost:3000
 - Health Checks vor Aktivierung
 
 ## 📝 Troubleshooting
+
+### Problem: Server in inkonsistentem Zustand
+
+```bash
+# Kompletter Reset des Servers
+./reset-server.sh
+```
+
+### Problem: Alte Deploy-Artifacts stören
+
+```bash
+# Cleanup alte Dateien
+./cleanup-server.sh
+```
+
+### Problem: svelte.config.js Adapter-Fehler
+
+```bash
+# Quick Fix anwenden
+./quick-fix.sh
+```
 
 ### Problem: Deployment hängt
 

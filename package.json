@@ -25,6 +25,8 @@
 		"deploy": "bash deploy-local.sh",
 		"deploy:force": "FORCE_DEPLOY=true bash deploy-local.sh",
 		"rollback": "echo 'Run this on server: ./rollback.sh'",
+		"reset:local": "reset-local.bat",
+		"reset:server": "echo 'Run this on server: ./reset-server.sh'",
 		"setup:windows": "scripts\\dev-setup.bat",
 		"build:windows": "scripts\\build.bat"
 	},
