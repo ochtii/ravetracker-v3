@@ -19,6 +19,16 @@ fi
 echo "🚀 Starting RaveTracker v3.0 Deployment..."
 echo "👤 Running as user: $(whoami)"
 
+# Auto-update temp_build before deployment
+TEMP_BUILD="$APP_PATH/temp_build"
+if [ -d "$TEMP_BUILD" ]; then
+    echo "🔄 Auto-updating temp_build..."
+    cd "$TEMP_BUILD"
+    git fetch origin main
+    git reset --hard origin/main
+    echo "✅ temp_build updated"
+fi
+
 # Configuration
 APP_PATH="/var/www/ravetracker-v3"
 REPO_URL="https://github.com/ochtii/ravetracker-v3.git"

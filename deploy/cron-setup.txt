@@ -1,0 +1,19 @@
+# Cron Job Setup für automatisches temp_build Update
+# 
+# Installation auf dem Server:
+# 1. Als deploy user: crontab -e
+# 2. Folgende Zeile hinzufügen:
+
+# Alle 5 Minuten prüfen ob es Updates gibt
+*/5 * * * * /var/www/ravetracker-v3/auto-update-temp-build.sh >> /var/www/ravetracker-v3/shared/logs/auto-update.log 2>&1
+
+# Oder nur alle 15 Minuten:
+# */15 * * * * /var/www/ravetracker-v3/auto-update-temp-build.sh >> /var/www/ravetracker-v3/shared/logs/auto-update.log 2>&1
+
+# Oder nur einmal pro Stunde:
+# 0 * * * * /var/www/ravetracker-v3/auto-update-temp-build.sh >> /var/www/ravetracker-v3/shared/logs/auto-update.log 2>&1
+
+# Setup Befehle:
+# mkdir -p /var/www/ravetracker-v3/shared/logs
+# chmod +x /var/www/ravetracker-v3/auto-update-temp-build.sh
+# crontab -e  # und obige Zeile hinzufügen
