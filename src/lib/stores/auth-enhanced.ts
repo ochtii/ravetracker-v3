@@ -110,11 +110,25 @@ export const isInitialized = derived(authStore, state => state.isInitialized)
 // User role derivations
 export const userRole = derived(profile, ($profile) => {
 	if (!$profile) return 'user'
-	if ($profile.is_organizer) return 'organizer'
+	if ($profile.role === 'admin') return 'admin'
+	if ($profile.is_organizer || $profile.role === 'organizer') return 'organizer'
 	return 'user'
 })
 
-export const isAdmin = derived(profile, ($profile) => $profile?.is_organizer || false)
+// Admin check derived store - checks if user has admin role
+export const isAdmin = derived(
+	[user, profile],
+	([$user, $profile]) => {
+		if (!$user || !$profile) return false;
+		return $profile.role === 'admin';
+	}
+);
+
+export const hasAdminAccess = derived(profile, ($profile) => $profile?.role === 'admin')
+export const hasOrganizerAccess = derived(profile, ($profile) => $profile?.role === 'admin' || $profile?.is_organizer || $profile?.role === 'organizer')
+
+// User role derived store
+export const userRole = derived(profile, ($profile) => $profile?.role || 'user')
 
 // Auth operations
 export const auth: AuthOperations = {

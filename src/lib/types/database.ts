@@ -45,6 +45,10 @@ export interface Database {
           is_organizer: boolean
           is_verified: boolean
           is_private: boolean
+          role: 'admin' | 'organizer' | 'user'
+          status: 'active' | 'inactive' | 'banned'
+          email: string | null
+          display_name: string | null
           created_at: string
           updated_at: string
         }
@@ -66,6 +70,10 @@ export interface Database {
           is_organizer?: boolean
           is_verified?: boolean
           is_private?: boolean
+          role?: 'admin' | 'organizer' | 'user'
+          status?: 'active' | 'inactive' | 'banned'
+          email?: string | null
+          display_name?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -87,6 +95,10 @@ export interface Database {
           is_organizer?: boolean
           is_verified?: boolean
           is_private?: boolean
+          role?: 'admin' | 'organizer' | 'user'
+          status?: 'active' | 'inactive' | 'banned'
+          email?: string | null
+          display_name?: string | null
           created_at?: string
           updated_at?: string
         }

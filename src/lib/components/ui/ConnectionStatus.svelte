@@ -6,8 +6,8 @@ Shows real-time connection status with visual feedback
 
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte'
+	import { connectionStatus } from '$lib/utils/realtime'
 	import { 
-		connectionStatus, 
 		isConnected, 
 		isConnecting, 
 		connectionError,
@@ -45,12 +45,13 @@ Shows real-time connection status with visual feedback
 	$: statusText = connected ? 'Connected' : connecting ? 'Connecting...' : error ? 'Disconnected' : 'Offline'
 
 	// Auto-hide dropdown after 5 seconds
+	let timeoutId: ReturnType<typeof setTimeout> | null = null
+	
 	$: if (showDropdown) {
-		const timeout = setTimeout(() => {
+		if (timeoutId) clearTimeout(timeoutId)
+		timeoutId = setTimeout(() => {
 			showDropdown = false
 		}, 5000)
-
-		return () => clearTimeout(timeout)
 	}
 
 	// Functions
@@ -249,7 +250,7 @@ Shows real-time connection status with visual feedback
 						disabled={connecting}
 						class="flex items-center space-x-2 px-3 py-1.5 text-sm font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
 					>
-						<RefreshCw class="w-3 h-3" class:animate-spin={connecting} />
+						<RefreshCw class="w-3 h-3 {connecting ? 'animate-spin' : ''}" />
 						<span>Reconnect</span>
 					</button>
 
@@ -364,7 +365,7 @@ Shows real-time connection status with visual feedback
 				disabled={connecting}
 				class="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
 			>
-				<RefreshCw class="w-4 h-4" class:animate-spin={connecting} />
+				<RefreshCw class="w-4 h-4 {connecting ? 'animate-spin' : ''}" />
 				<span>Reconnect</span>
 			</button>
 

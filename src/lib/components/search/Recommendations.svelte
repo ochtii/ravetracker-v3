@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { searchService, recommendationState } from '$lib/stores/search';
+  import { searchService, recommendationsState } from '$lib/stores/search';
   import { user } from '$lib/stores/auth';
   import { MapPin, Calendar, Clock, Star, TrendingUp, Users, Sparkles } from 'lucide-svelte';
   import { goto } from '$app/navigation';
@@ -14,9 +14,9 @@
   let currentType = type;
   
   // Reactive values
-  $: recommendations = $recommendationState.recommendations;
-  $: isLoading = $recommendationState.isLoading;
-  $: error = $recommendationState.error;
+  $: recommendations = $recommendationsState.recommendations;
+  $: isLoading = $recommendationsState.loading;
+  $: error = $recommendationsState.error;
   
   async function loadRecommendations() {
     if (!$user?.id) return;
@@ -155,10 +155,10 @@
               <svelte:component 
                 this={getScoreIcon(currentType)} 
                 size={14} 
-                class={getScoreColor(recommendation.similarity_score || recommendation.affinity_score || 0)}
+                class={getScoreColor(recommendation.similarity_score || 0)}
               />
-              <span class="score-value {getScoreColor(recommendation.similarity_score || recommendation.affinity_score || 0)}">
-                {Math.round((recommendation.similarity_score || recommendation.affinity_score || 0) * 100)}%
+              <span class="score-value {getScoreColor(recommendation.similarity_score || 0)}">
+                {Math.round((recommendation.similarity_score || 0) * 100)}%
               </span>
             </div>
             

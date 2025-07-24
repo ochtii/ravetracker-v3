@@ -19,11 +19,7 @@ Admin interface for moderating events, reviewing submissions, and managing conte
 		Eye,
 		Check,
 		X,
-		AlertT									
-									<div class="flex items-center space-x-2">
-										<MapPin class="w-4 h-4" />
-										<span class="truncate">{selectedEvent.venue || selectedEvent.location_city}</span>
-									</div>le,
+		AlertTriangle,
 		Flag,
 		Clock,
 		MapPin,
