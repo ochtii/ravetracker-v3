@@ -43,7 +43,7 @@
     // Base modal styles
     'fixed inset-0 z-50 flex items-center justify-center p-4',
     // Backdrop styles
-    getBackdropClasses(backdrop),
+    getBackdropClasses(backdrop || 'blur'),
     // Animation
     open ? animations.fadeIn : animations.fadeOut
   )
@@ -98,6 +98,7 @@
     role="dialog"
     aria-modal="true"
     aria-labelledby={title ? 'modal-title' : undefined}
+    tabindex="-1"
   >
     <div class={contentClass}>
       {#if title || closable}

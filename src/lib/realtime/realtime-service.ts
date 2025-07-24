@@ -1,4 +1,4 @@
-import { supabase } from '$lib/supabase'
+import { supabase } from '$lib/utils/supabase'
 import { RealtimeManager } from './realtime-manager'
 import { initializeRealtime } from './realtime-stores'
 import type { User } from '@supabase/supabase-js'

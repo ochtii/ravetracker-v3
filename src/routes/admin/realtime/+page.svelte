@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import { page } from '$app/stores'
-  import { user } from '$lib/stores/auth'
+  import { user, isAdmin } from '$lib/stores/auth'
   import { 
     initializeRealtimeSystem, 
     sendAdminBroadcast, 
@@ -12,7 +12,6 @@
     adminBroadcasts,
     liveEventFeed
   } from '$lib/realtime/realtime-stores'
-  import { hasRole } from '$lib/utils/auth'
 
   let broadcastForm = {
     type: 'general',
@@ -27,14 +26,12 @@
     message: ''
   }
 
-  let isAdmin = false
+  // Use the isAdmin store directly instead of hasRole function
+  $: isUserAdmin = $isAdmin
 
   onMount(() => {
     // Initialize realtime system
     initializeRealtimeSystem($user)
-
-    // Check admin status
-    isAdmin = $user ? hasRole($user, 'admin') : false
   })
 
   async function handleSendBroadcast() {
@@ -131,7 +128,7 @@
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
       
       <!-- Admin Broadcast Panel -->
-      {#if isAdmin}
+      {#if isUserAdmin}
         <div class="glass-card p-6 bg-glass-surface border-glass-surface-border">
           <h2 class="text-xl font-semibold text-white mb-4">Admin Broadcasts</h2>
           
