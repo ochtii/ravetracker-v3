@@ -150,6 +150,8 @@ jobs:
             echo "✅ /var/www/ravetracker-v3 exists"
             echo "📋 Directory contents:"
             ls -la /var/www/ravetracker-v3/
+            echo "📊 Directory permissions:"
+            ls -ld /var/www/ravetracker-v3/
           fi
           
           echo ""

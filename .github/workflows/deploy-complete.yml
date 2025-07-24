@@ -1,0 +1,556 @@
+name: Deploy RaveTracker v3.0
+
+on:
+  workflow_dispatch:
+    inputs:
+      deployment_mode:
+        description: 'Deployment Mode'
+        required: true
+        default: 'full'
+        type: choice
+        options:
+        - full
+        - app-only
+        - nginx-only
+      server_setup:
+        description: 'Setup server directories first'
+        required: true
+        default: true
+        type: boolean
+      nginx_setup:
+        description: 'Setup NGINX configuration'
+        required: true
+        default: true
+        type: boolean
+      start_app:
+        description: 'Start SvelteKit app after deployment'
+        required: true
+        default: true
+        type: boolean
+
+jobs:
+  pre-deployment:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Deployment Info
+      run: |
+        echo "🚀 RaveTracker v3.0 Deployment"
+        echo "==============================="
+        echo "📅 Started: $(date)"
+        echo "🔧 Mode: ${{ github.event.inputs.deployment_mode }}"
+        echo "📁 Server Setup: ${{ github.event.inputs.server_setup }}"
+        echo "🌐 NGINX Setup: ${{ github.event.inputs.nginx_setup }}"
+        echo "🚀 Start App: ${{ github.event.inputs.start_app }}"
+
+  server-setup:
+    runs-on: ubuntu-latest
+    if: github.event.inputs.server_setup == 'true' && (github.event.inputs.deployment_mode == 'full' || github.event.inputs.deployment_mode == 'app-only')
+    
+    steps:
+    - name: Setup Server Environment
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.HOST }}
+        username: ${{ secrets.USERNAME }}
+        key: ${{ secrets.SSH_KEY }}
+        port: ${{ secrets.PORT || '22' }}
+        timeout: 300s
+        command_timeout: 120s
+        script: |
+          echo "🏗️ Setting up server environment..."
+          echo "===================================="
+          
+          # Create main directory with proper permissions
+          if [ ! -d "/var/www/ravetracker-v3" ]; then
+            echo "📁 Creating main directory..."
+            sudo mkdir -p /var/www/ravetracker-v3
+            sudo chown -R $USER:$USER /var/www/ravetracker-v3
+            echo "✅ Main directory created"
+          else
+            echo "✅ Main directory exists"
+          fi
+          
+          # Navigate to project directory
+          cd /var/www/ravetracker-v3
+          
+          # Initialize git repository if needed
+          if [ ! -d ".git" ]; then
+            echo "🔧 Initializing Git repository..."
+            git init
+            git remote add origin https://github.com/Zian73/ravetracker-v3.git || true
+            echo "✅ Git repository initialized"
+          else
+            echo "✅ Git repository exists"
+          fi
+          
+          # Create necessary directories
+          echo "📁 Creating directory structure..."
+          mkdir -p temp_build
+          mkdir -p backups
+          mkdir -p logs
+          mkdir -p scripts
+          echo "✅ Directory structure created"
+          
+          # Copy deployment script
+          echo "📜 Setting up deployment scripts..."
+          cat > scripts/auto-update-temp-build.sh << 'EOF'
+          #!/bin/bash
+          
+          # RaveTracker v3.0 - Auto Update Script
+          # =====================================
+          
+          SCRIPT_DIR="/var/www/ravetracker-v3"
+          BUILD_DIR="$SCRIPT_DIR/temp_build"
+          BACKUP_DIR="$SCRIPT_DIR/backups"
+          LOG_FILE="$SCRIPT_DIR/logs/deployment.log"
+          
+          # Logging function
+          log() {
+              echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"
+          }
+          
+          log "🚀 Starting RaveTracker v3.0 deployment..."
+          
+          # Pre-flight checks
+          log "🔍 Running pre-flight checks..."
+          
+          if [ ! -d "$SCRIPT_DIR" ]; then
+              log "❌ Project directory not found: $SCRIPT_DIR"
+              exit 1
+          fi
+          
+          cd "$SCRIPT_DIR"
+          
+          # Create backup if build exists
+          if [ -d "$BUILD_DIR" ]; then
+              BACKUP_NAME="build_backup_$(date +%Y%m%d_%H%M%S)"
+              log "💾 Creating backup: $BACKUP_NAME"
+              cp -r "$BUILD_DIR" "$BACKUP_DIR/$BACKUP_NAME"
+              
+              # Keep only last 5 backups
+              cd "$BACKUP_DIR"
+              ls -t | tail -n +6 | xargs -r rm -rf
+              cd "$SCRIPT_DIR"
+              log "✅ Backup created and old backups cleaned"
+          fi
+          
+          # Update repository
+          log "📥 Fetching latest changes..."
+          git fetch origin main
+          
+          # Check if updates available
+          LOCAL_COMMIT=$(git rev-parse HEAD 2>/dev/null || echo "none")
+          REMOTE_COMMIT=$(git rev-parse origin/main 2>/dev/null || echo "none")
+          
+          if [ "$LOCAL_COMMIT" = "$REMOTE_COMMIT" ] && [ "$LOCAL_COMMIT" != "none" ]; then
+              log "✅ Already up to date (commit: ${LOCAL_COMMIT:0:8})"
+          else
+              log "🔄 Updating to latest version..."
+              git reset --hard origin/main
+              log "✅ Updated to commit: $(git rev-parse --short HEAD)"
+          fi
+          
+          # Install/update dependencies if package.json exists
+          if [ -f "package.json" ]; then
+              log "📦 Installing dependencies..."
+              if command -v npm &> /dev/null; then
+                  npm ci --production
+                  log "✅ Dependencies installed"
+              else
+                  log "⚠️ npm not found, skipping dependency installation"
+              fi
+          fi
+          
+          # Build application if needed
+          if [ -f "package.json" ] && command -v npm &> /dev/null; then
+              log "🏗️ Building application..."
+              npm run build
+              
+              if [ -d "build" ]; then
+                  # Copy build to temp_build
+                  rm -rf "$BUILD_DIR"
+                  cp -r build "$BUILD_DIR"
+                  log "✅ Build completed and copied to temp_build"
+              else
+                  log "⚠️ Build directory not found, using existing temp_build"
+              fi
+          fi
+          
+          # Copy this script to scripts directory
+          cp "$0" "$SCRIPT_DIR/scripts/auto-update-temp-build.sh" 2>/dev/null || true
+          
+          log "🎉 Deployment completed successfully!"
+          log "📊 Summary:"
+          log "   - Project: RaveTracker v3.0"
+          log "   - Commit: $(git rev-parse --short HEAD)"
+          log "   - Build dir: $BUILD_DIR"
+          log "   - Log file: $LOG_FILE"
+          
+          EOF
+          
+          chmod +x scripts/auto-update-temp-build.sh
+          echo "✅ Deployment script created"
+          
+          # Create basic index.html if not exists
+          if [ ! -f "temp_build/index.html" ]; then
+            echo "📄 Creating placeholder index.html..."
+            mkdir -p temp_build
+            cat > temp_build/index.html << 'EOF'
+          <!DOCTYPE html>
+          <html lang="de">
+          <head>
+              <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <title>RaveTracker v3.0 - Loading...</title>
+              <style>
+                  body {
+                      font-family: 'Arial', sans-serif;
+                      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                      margin: 0;
+                      padding: 0;
+                      min-height: 100vh;
+                      display: flex;
+                      justify-content: center;
+                      align-items: center;
+                      color: white;
+                  }
+                  .container {
+                      text-align: center;
+                      padding: 2rem;
+                      border-radius: 20px;
+                      background: rgba(255, 255, 255, 0.1);
+                      backdrop-filter: blur(10px);
+                      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+                  }
+                  h1 {
+                      font-size: 3rem;
+                      margin-bottom: 1rem;
+                      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+                  }
+                  p {
+                      font-size: 1.2rem;
+                      margin-bottom: 2rem;
+                  }
+                  .loading {
+                      display: inline-block;
+                      width: 40px;
+                      height: 40px;
+                      border: 4px solid rgba(255, 255, 255, 0.3);
+                      border-radius: 50%;
+                      border-top-color: #fff;
+                      animation: spin 1s ease-in-out infinite;
+                  }
+                  @keyframes spin {
+                      to { transform: rotate(360deg); }
+                  }
+              </style>
+          </head>
+          <body>
+              <div class="container">
+                  <h1>🎵 RaveTracker v3.0</h1>
+                  <p>Server wird vorbereitet...</p>
+                  <div class="loading"></div>
+                  <p style="margin-top: 2rem; font-size: 1rem; opacity: 0.8;">
+                      Die Anwendung wird in Kürze verfügbar sein.
+                  </p>
+              </div>
+          </body>
+          </html>
+          EOF
+            echo "✅ Placeholder page created"
+          fi
+          
+          # Set permissions
+          echo "🔒 Setting permissions..."
+          chmod -R 755 /var/www/ravetracker-v3
+          echo "✅ Permissions set"
+          
+          echo ""
+          echo "🎉 Server setup completed!"
+          echo "=========================="
+          echo "📁 Project directory: /var/www/ravetracker-v3"
+          echo "🏗️ Build directory: /var/www/ravetracker-v3/temp_build"
+          echo "📜 Scripts: /var/www/ravetracker-v3/scripts"
+          echo "📊 Logs: /var/www/ravetracker-v3/logs"
+
+  nginx-setup:
+    runs-on: ubuntu-latest
+    needs: [server-setup]
+    if: github.event.inputs.nginx_setup == 'true' && (github.event.inputs.deployment_mode == 'full' || github.event.inputs.deployment_mode == 'nginx-only')
+    
+    steps:
+    - name: Setup NGINX
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.HOST }}
+        username: ${{ secrets.USERNAME }}
+        key: ${{ secrets.SSH_KEY }}
+        port: ${{ secrets.PORT || '22' }}
+        timeout: 300s
+        command_timeout: 120s
+        script: |
+          echo "🌐 Setting up NGINX for RaveTracker v3.0..."
+          echo "============================================"
+          
+          # Install NGINX if not present
+          if ! command -v nginx &> /dev/null; then
+            echo "📦 Installing NGINX..."
+            sudo apt update
+            sudo apt install nginx -y
+            sudo systemctl enable nginx
+          fi
+          
+          # Create NGINX configuration
+          echo "📝 Creating NGINX configuration..."
+          sudo tee /etc/nginx/sites-available/ravetracker-v3 > /dev/null <<'EOF'
+          server {
+              listen 80 default_server;
+              listen [::]:80 default_server;
+              
+              server_name _;
+              
+              # Logs
+              access_log /var/log/nginx/ravetracker-access.log;
+              error_log /var/log/nginx/ravetracker-error.log;
+              
+              # Try proxy first, fallback to static
+              location / {
+                  # Try proxy to SvelteKit app
+                  proxy_pass http://127.0.0.1:3000;
+                  proxy_http_version 1.1;
+                  proxy_set_header Upgrade $http_upgrade;
+                  proxy_set_header Connection 'upgrade';
+                  proxy_set_header Host $host;
+                  proxy_set_header X-Real-IP $remote_addr;
+                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto $scheme;
+                  proxy_cache_bypass $http_upgrade;
+                  
+                  # Short timeouts for quick fallback
+                  proxy_connect_timeout 5s;
+                  proxy_send_timeout 5s;
+                  proxy_read_timeout 5s;
+                  
+                  # Fallback to static files if proxy fails
+                  error_page 502 503 504 = @static;
+              }
+              
+              # Static file fallback
+              location @static {
+                  root /var/www/ravetracker-v3/temp_build;
+                  try_files $uri $uri/ /index.html;
+              }
+              
+              # Direct static assets
+              location /static/ {
+                  alias /var/www/ravetracker-v3/temp_build/;
+                  expires 1y;
+                  add_header Cache-Control "public, max-age=31536000, immutable";
+              }
+              
+              # Health check
+              location /health {
+                  access_log off;
+                  return 200 "healthy\n";
+                  add_header Content-Type text/plain;
+              }
+              
+              # Security headers
+              add_header X-Frame-Options "SAMEORIGIN" always;
+              add_header X-XSS-Protection "1; mode=block" always;
+              add_header X-Content-Type-Options "nosniff" always;
+              
+              server_tokens off;
+              
+              gzip on;
+              gzip_types text/plain text/css application/json application/javascript text/xml application/xml;
+          }
+          EOF
+          
+          # Enable site
+          sudo ln -sf /etc/nginx/sites-available/ravetracker-v3 /etc/nginx/sites-enabled/
+          sudo rm -f /etc/nginx/sites-enabled/default
+          
+          # Test and reload
+          if sudo nginx -t; then
+            sudo systemctl reload nginx
+            echo "✅ NGINX configured and reloaded"
+          else
+            echo "❌ NGINX configuration error"
+            exit 1
+          fi
+          
+          # Configure firewall
+          if command -v ufw &> /dev/null; then
+            sudo ufw allow 'Nginx HTTP' 2>/dev/null || sudo ufw allow 80/tcp
+            echo "✅ Firewall configured"
+          fi
+          
+          SERVER_IP=$(hostname -I | awk '{print $1}')
+          echo "🌐 Access URL: http://$SERVER_IP"
+
+  deploy-app:
+    runs-on: ubuntu-latest
+    needs: [server-setup]
+    if: github.event.inputs.deployment_mode == 'full' || github.event.inputs.deployment_mode == 'app-only'
+    
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+        
+    - name: Install Dependencies
+      run: npm ci
+      
+    - name: Build Application
+      run: npm run build
+      
+    - name: Deploy to Server
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.HOST }}
+        username: ${{ secrets.USERNAME }}
+        key: ${{ secrets.SSH_KEY }}
+        port: ${{ secrets.PORT || '22' }}
+        timeout: 300s
+        command_timeout: 120s
+        script: |
+          echo "🚀 Deploying RaveTracker v3.0..."
+          echo "================================="
+          
+          cd /var/www/ravetracker-v3
+          
+          # Run deployment script
+          if [ -f "scripts/auto-update-temp-build.sh" ]; then
+            echo "📜 Running deployment script..."
+            bash scripts/auto-update-temp-build.sh
+          else
+            echo "⚠️ Deployment script not found, running manual deployment..."
+            
+            # Manual deployment fallback
+            git fetch origin main
+            git reset --hard origin/main
+            
+            if [ -f "package.json" ] && command -v npm &> /dev/null; then
+              npm ci --production
+              npm run build
+              
+              if [ -d "build" ]; then
+                rm -rf temp_build
+                cp -r build temp_build
+                echo "✅ Build deployed to temp_build"
+              fi
+            fi
+          fi
+          
+          echo "✅ Application deployed successfully!"
+
+  start-app:
+    runs-on: ubuntu-latest
+    needs: [deploy-app, nginx-setup]
+    if: github.event.inputs.start_app == 'true' && (github.event.inputs.deployment_mode == 'full' || github.event.inputs.deployment_mode == 'app-only')
+    
+    steps:
+    - name: Start SvelteKit Application
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.HOST }}
+        username: ${{ secrets.USERNAME }}
+        key: ${{ secrets.SSH_KEY }}
+        port: ${{ secrets.PORT || '22' }}
+        timeout: 120s
+        command_timeout: 60s
+        script: |
+          echo "🚀 Starting SvelteKit application..."
+          echo "==================================="
+          
+          cd /var/www/ravetracker-v3
+          
+          # Kill existing Node processes on port 3000
+          pkill -f "node.*3000" || true
+          sleep 2
+          
+          # Start application in background
+          if [ -f "package.json" ] && command -v npm &> /dev/null; then
+            echo "🌟 Starting RaveTracker v3.0 server..."
+            nohup npm start > logs/app.log 2>&1 &
+            
+            # Wait a moment and check if it started
+            sleep 5
+            
+            if curl -s http://localhost:3000 > /dev/null; then
+              echo "✅ SvelteKit server started successfully on port 3000"
+            else
+              echo "⚠️ Server may still be starting up"
+            fi
+          else
+            echo "⚠️ Cannot start Node.js app, serving static files only"
+          fi
+          
+          SERVER_IP=$(hostname -I | awk '{print $1}')
+          echo ""
+          echo "🎉 Deployment Complete!"
+          echo "======================="
+          echo "🌐 Access URL: http://$SERVER_IP"
+          echo "📊 Mode: Static files + SvelteKit proxy"
+          echo "📁 Static files: /var/www/ravetracker-v3/temp_build"
+          echo "🚀 SvelteKit app: http://localhost:3000"
+          echo "📝 App logs: /var/www/ravetracker-v3/logs/app.log"
+
+  post-deployment:
+    runs-on: ubuntu-latest
+    needs: [nginx-setup, deploy-app, start-app]
+    if: always()
+    
+    steps:
+    - name: Deployment Summary
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.HOST }}
+        username: ${{ secrets.USERNAME }}
+        key: ${{ secrets.SSH_KEY }}
+        port: ${{ secrets.PORT || '22' }}
+        timeout: 60s
+        command_timeout: 30s
+        script: |
+          echo "📊 RaveTracker v3.0 - Deployment Summary"
+          echo "========================================"
+          echo "📅 Completed: $(date)"
+          
+          SERVER_IP=$(hostname -I | awk '{print $1}')
+          echo "🌐 Server IP: $SERVER_IP"
+          echo "🔗 Access URL: http://$SERVER_IP"
+          echo ""
+          
+          # Check services
+          echo "🔍 Service Status:"
+          echo "=================="
+          
+          # NGINX status
+          if sudo systemctl is-active --quiet nginx; then
+            echo "✅ NGINX: Running"
+          else
+            echo "❌ NGINX: Not running"
+          fi
+          
+          # App status
+          if curl -s http://localhost:3000 > /dev/null; then
+            echo "✅ SvelteKit App: Running on port 3000"
+          else
+            echo "⚠️ SvelteKit App: Not responding (static fallback active)"
+          fi
+          
+          # Port status
+          echo ""
+          echo "📡 Open Ports:"
+          sudo netstat -tlnp | grep :80 || sudo ss -tlnp | grep :80
+          
+          echo ""
+          echo "🎉 RaveTracker v3.0 is ready!"
+          echo "Visit http://$SERVER_IP to access your application"

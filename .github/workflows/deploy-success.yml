@@ -1,0 +1,171 @@
+name: SSH Success - Deploy RaveTracker
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy-production:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+      
+    - name: Deploy to Production Server
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.HOST }}
+        username: ${{ secrets.USERNAME }}
+        key: ${{ secrets.SSH_KEY }}
+        port: ${{ secrets.PORT || '22' }}
+        timeout: 300s
+        command_timeout: 120s
+        script: |
+          echo "🚀 RaveTracker v3.0 - Production Deployment"
+          echo "==========================================="
+          echo "📅 Deployment started: $(date)"
+          echo "👤 User: $(whoami)"
+          echo "🏠 Server: $(hostname)"
+          echo ""
+          
+          # Ensure we have sudo access
+          echo "🔐 Checking sudo access..."
+          if sudo -n true 2>/dev/null; then
+            echo "✅ Sudo access confirmed"
+          else
+            echo "⚠️ Sudo may require password - using user permissions where possible"
+          fi
+          
+          # Create and setup project directory
+          echo ""
+          echo "📁 Setting up project directory..."
+          
+          # First create the main directory with sudo
+          if [ ! -d "/var/www/ravetracker-v3" ]; then
+            echo "📂 Creating /var/www/ravetracker-v3 with sudo..."
+            sudo mkdir -p /var/www/ravetracker-v3
+            echo "✅ Main directory created"
+          fi
+          
+          # Set ownership to current user
+          echo "🔐 Setting ownership to $USER..."
+          sudo chown -R $USER:$USER /var/www/ravetracker-v3
+          echo "✅ Ownership set to $USER"
+          
+          # Create subdirectories (now without sudo needed)
+          echo "📂 Creating project structure..."
+          mkdir -p /var/www/ravetracker-v3/{releases,shared/{logs,uploads,node_modules}}
+          echo "✅ Project structure created"
+          
+          # Verify setup
+          echo "📊 Directory verification:"
+          ls -la /var/www/ravetracker-v3/
+          echo "🔍 Ownership check:"
+          ls -ld /var/www/ravetracker-v3/
+          
+          cd /var/www/ravetracker-v3
+          
+          # Backup existing temp_build
+          echo ""
+          echo "📦 Managing existing deployments..."
+          if [ -d "temp_build" ]; then
+            BACKUP_NAME="temp_build_backup_$(date +%Y%m%d_%H%M%S)"
+            mv temp_build "$BACKUP_NAME"
+            echo "✅ Existing temp_build backed up as $BACKUP_NAME"
+            
+            # Keep only last 3 backups
+            ls -td temp_build_backup_* 2>/dev/null | tail -n +4 | xargs -r rm -rf
+            echo "🧹 Old backups cleaned (keeping last 3)"
+          fi
+          
+          # Clone fresh repository
+          echo ""
+          echo "📥 Cloning fresh repository..."
+          if git clone https://github.com/ochtii/ravetracker-v3.git temp_build; then
+            echo "✅ Repository cloned successfully"
+            
+            cd temp_build
+            COMMIT_HASH=$(git rev-parse --short HEAD)
+            COMMIT_MESSAGE=$(git log -1 --pretty=format:'%s')
+            echo "📍 Deployed commit: $COMMIT_HASH"
+            echo "📝 Commit message: $COMMIT_MESSAGE"
+            
+            cd ..
+            
+            # Install auto-update script
+            if [ -f "temp_build/auto-update-temp-build.sh" ]; then
+              cp temp_build/auto-update-temp-build.sh ./
+              chmod +x auto-update-temp-build.sh
+              echo "📋 Auto-update script installed"
+            fi
+            
+            # Copy deployment scripts
+            if [ -d "temp_build/scripts" ]; then
+              cp temp_build/scripts/*.sh ./ 2>/dev/null || echo "No additional scripts found"
+              chmod +x *.sh 2>/dev/null
+              echo "📋 Deployment scripts copied and made executable"
+            fi
+            
+            echo ""
+            echo "🎉 Deployment completed successfully!"
+            echo "📊 Deployment Summary:"
+            echo "  - Repository: ochtii/ravetracker-v3"
+            echo "  - Location: /var/www/ravetracker-v3/temp_build"
+            echo "  - Commit: $COMMIT_HASH"
+            echo "  - Size: $(du -sh temp_build | cut -f1)"
+            echo "  - Files: $(find temp_build -type f | wc -l) files"
+            echo "  - Completed: $(date)"
+            
+            # List key files
+            echo ""
+            echo "📁 Key project files deployed:"
+            find temp_build -maxdepth 2 -name "package.json" -o -name "*.config.*" -o -name "README.md" | head -5
+            
+          else
+            echo "❌ Failed to clone repository"
+            echo "💡 Check internet connectivity and repository access"
+            exit 1
+          fi
+          
+          echo ""
+          echo "🔧 Next steps:"
+          echo "1. Build the application (if needed)"
+          echo "2. Configure environment variables"
+          echo "3. Start/restart services"
+          echo "4. Test the deployment"
+
+  notify-success:
+    needs: deploy-production
+    runs-on: ubuntu-latest
+    if: success()
+    
+    steps:
+    - name: Deployment Success
+      run: |
+        echo "🎉 RaveTracker v3.0 Deployment Successful!"
+        echo "========================================"
+        echo "✅ temp_build successfully deployed"
+        echo "📍 Location: /var/www/ravetracker-v3/temp_build"
+        echo "🕒 Completed: $(date)"
+        echo ""
+        echo "🔗 Repository: https://github.com/ochtii/ravetracker-v3"
+        echo "📋 Auto-update script available for future deployments"
+
+  notify-failure:
+    needs: deploy-production
+    runs-on: ubuntu-latest
+    if: failure()
+    
+    steps:
+    - name: Deployment Failed
+      run: |
+        echo "❌ RaveTracker v3.0 Deployment Failed"
+        echo "===================================="
+        echo "💡 Check the deployment logs above for details"
+        echo "🔍 Common issues:"
+        echo "  - SSH connection problems"
+        echo "  - Permission issues"
+        echo "  - Git connectivity problems"
+        echo "  - Disk space issues"
