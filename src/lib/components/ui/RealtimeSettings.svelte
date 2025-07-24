@@ -358,7 +358,7 @@ Configure real-time features and notification preferences
 								disabled={status.connecting}
 								class="w-full flex items-center justify-center px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50 focus:ring-2 focus:ring-gray-500 disabled:opacity-50"
 							>
-								<RefreshCw class="w-4 h-4 mr-2" class:animate-spin={status.connecting} />
+								<RefreshCw class="w-4 h-4 mr-2 {status.connecting ? 'animate-spin' : ''}" />
 								Force Reconnect
 							</button>
 						</div>

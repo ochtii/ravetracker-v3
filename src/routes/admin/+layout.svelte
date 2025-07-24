@@ -55,6 +55,12 @@ Main layout for admin panel with navigation and access control
 			adminOnly: false
 		},
 		{
+			name: 'Verification Management',
+			href: '/admin/verification',
+			icon: Shield,
+			adminOnly: false
+		},
+		{
 			name: 'Analytics',
 			href: '/admin/analytics',
 			icon: BarChart3,
@@ -69,6 +75,12 @@ Main layout for admin panel with navigation and access control
 		{
 			name: 'Role Management',
 			href: '/admin/roles',
+			icon: Shield,
+			adminOnly: true
+		},
+		{
+			name: 'Security & Monitoring',
+			href: '/admin/security',
 			icon: Shield,
 			adminOnly: true
 		}

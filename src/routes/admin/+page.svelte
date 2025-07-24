@@ -8,9 +8,8 @@ Main admin dashboard with overview statistics and quick actions
 	import { onMount } from 'svelte'
 	import { goto } from '$app/navigation'
 	import { user, isAdmin } from '$lib/stores/auth-enhanced'
-	import { supabase } from '$lib/utils/supabase'
+	import { adminService } from '$lib/utils/admin-service'
 	import LoadingSpinner from '$lib/components/ui/LoadingSpinner.svelte'
-	import ErrorDisplay from '$lib/components/ui/ErrorDisplay.svelte'
 	import { 
 		Users, 
 		Calendar, 
@@ -23,39 +22,15 @@ Main admin dashboard with overview statistics and quick actions
 		Shield,
 		Plus,
 		Eye,
-		Edit,
-		Trash2,
-		MoreHorizontal
+		Trash2
 	} from 'lucide-svelte'
 	import { formatDistanceToNow, format } from 'date-fns'
-
-	// Types
-	interface DashboardStats {
-		totalUsers: number
-		totalEvents: number
-		pendingEvents: number
-		activeEvents: number
-		todayRegistrations: number
-		todayEvents: number
-		growthStats: {
-			usersGrowth: number
-			eventsGrowth: number
-		}
-	}
-
-	interface RecentActivity {
-		id: string
-		type: 'user_registered' | 'event_created' | 'event_published' | 'event_cancelled'
-		description: string
-		user?: any
-		event?: any
-		timestamp: Date
-	}
+	import type { AdminStats, AdminActivity, AdminEvent } from '$lib/utils/admin-service'
 
 	// State
 	let loading = true
 	let error: string | null = null
-	let stats: DashboardStats = {
+	let stats: AdminStats = {
 		totalUsers: 0,
 		totalEvents: 0,
 		pendingEvents: 0,
@@ -67,8 +42,8 @@ Main admin dashboard with overview statistics and quick actions
 			eventsGrowth: 0
 		}
 	}
-	let recentActivity: RecentActivity[] = []
-	let pendingEvents: any[] = []
+	let recentActivity: AdminActivity[] = []
+	let pendingEvents: AdminEvent[] = []
 
 	// Functions
 	async function loadDashboardData() {
@@ -76,7 +51,7 @@ Main admin dashboard with overview statistics and quick actions
 			loading = true
 			error = null
 
-			// Load basic statistics
+			// Load data using admin service
 			await Promise.all([
 				loadStats(),
 				loadRecentActivity(),
@@ -92,139 +67,41 @@ Main admin dashboard with overview statistics and quick actions
 	}
 
 	async function loadStats() {
-		// Get total users
-		const { data: usersData, error: usersError } = await supabase
-			.from('profiles')
-			.select('id, created_at')
-
-		if (usersError) throw usersError
-
-		// Get total events
-		const { data: eventsData, error: eventsError } = await supabase
-			.from('events')
-			.select('id, status, created_at, date_time')
-
-		if (eventsError) throw eventsError
-
-		// Calculate stats
-		const now = new Date()
-		const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-		const lastWeek = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000)
-
-		stats.totalUsers = usersData?.length || 0
-		stats.totalEvents = eventsData?.length || 0
-		stats.pendingEvents = eventsData?.filter(e => e.status === 'draft').length || 0
-		stats.activeEvents = eventsData?.filter(e => e.status === 'published' && new Date(e.date_time) > now).length || 0
-		
-		stats.todayRegistrations = usersData?.filter(u => 
-			new Date(u.created_at) >= today
-		).length || 0
-
-		stats.todayEvents = eventsData?.filter(e => 
-			new Date(e.created_at) >= today
-		).length || 0
-
-		// Growth calculations
-		const usersLastWeek = usersData?.filter(u => 
-			new Date(u.created_at) >= lastWeek && new Date(u.created_at) < today
-		).length || 0
-
-		const eventsLastWeek = eventsData?.filter(e => 
-			new Date(e.created_at) >= lastWeek && new Date(e.created_at) < today
-		).length || 0
-
-		stats.growthStats.usersGrowth = usersLastWeek > 0 
-			? ((stats.todayRegistrations - usersLastWeek) / usersLastWeek) * 100 
-			: 0
-
-		stats.growthStats.eventsGrowth = eventsLastWeek > 0 
-			? ((stats.todayEvents - eventsLastWeek) / eventsLastWeek) * 100 
-			: 0
+		try {
+			stats = await adminService.getStats()
+		} catch (err) {
+			console.warn('Failed to load stats:', err)
+			// Keep default empty stats
+		}
 	}
 
 	async function loadRecentActivity() {
-		// This would typically come from an activity log table
-		// For now, we'll simulate recent activity
-		const { data: recentUsers } = await supabase
-			.from('profiles')
-			.select('id, display_name, email, created_at')
-			.order('created_at', { ascending: false })
-			.limit(5)
-
-		const { data: recentEvents } = await supabase
-			.from('events')
-			.select('id, title, status, created_at, organizer_id')
-			.order('created_at', { ascending: false })
-			.limit(5)
-
-		const activities: RecentActivity[] = []
-
-		// Add user registrations
-		recentUsers?.forEach(user => {
-			activities.push({
-				id: `user-${user.id}`,
-				type: 'user_registered',
-				description: `New user registered: ${user.display_name || user.email}`,
-				user,
-				timestamp: new Date(user.created_at)
-			})
-		})
-
-		// Add event activities
-		recentEvents?.forEach(event => {
-			activities.push({
-				id: `event-${event.id}`,
-				type: event.status === 'published' ? 'event_published' : 'event_created',
-				description: `Event ${event.status === 'published' ? 'published' : 'created'}: ${event.title}`,
-				event,
-				timestamp: new Date(event.created_at)
-			})
-		})
-
-		// Sort by timestamp
-		recentActivity = activities
-			.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
-			.slice(0, 10)
+		try {
+			recentActivity = await adminService.getRecentActivity()
+		} catch (err) {
+			console.warn('Failed to load recent activity:', err)
+			recentActivity = []
+		}
 	}
 
 	async function loadPendingEvents() {
-		const { data, error } = await supabase
-			.from('events')
-			.select(`
-				id,
-				title,
-				description,
-				date_time,
-				location_name,
-				created_at,
-				organizer:organizer_id (
-					id,
-					display_name,
-					email
-				)
-			`)
-			.eq('status', 'draft')
-			.order('created_at', { ascending: false })
-			.limit(5)
-
-		if (error) throw error
-		pendingEvents = data || []
+		try {
+			pendingEvents = await adminService.getPendingEvents()
+		} catch (err) {
+			console.warn('Failed to load pending events:', err)
+			pendingEvents = []
+		}
 	}
 
 	async function approveEvent(eventId: string) {
 		try {
-			const { error } = await supabase
-				.from('events')
-				.update({ 
-					status: 'published',
-					published_at: new Date().toISOString()
-				})
-				.eq('id', eventId)
-
-			if (error) throw error
-
-			// Reload data
-			await loadDashboardData()
+			const result = await adminService.approveEvent(eventId)
+			if (result.error) {
+				console.error('Failed to approve event:', result.error)
+			} else {
+				// Reload data on success
+				await loadDashboardData()
+			}
 		} catch (err) {
 			console.error('Failed to approve event:', err)
 		}
@@ -232,17 +109,13 @@ Main admin dashboard with overview statistics and quick actions
 
 	async function rejectEvent(eventId: string) {
 		try {
-			const { error } = await supabase
-				.from('events')
-				.update({ 
-					status: 'cancelled'
-				})
-				.eq('id', eventId)
-
-			if (error) throw error
-
-			// Reload data
-			await loadDashboardData()
+			const result = await adminService.rejectEvent(eventId)
+			if (result.error) {
+				console.error('Failed to reject event:', result.error)
+			} else {
+				// Reload data on success
+				await loadDashboardData()
+			}
 		} catch (err) {
 			console.error('Failed to reject event:', err)
 		}
@@ -282,18 +155,41 @@ Main admin dashboard with overview statistics and quick actions
 <div class="mb-8">
 	<h1 class="text-3xl font-bold text-gray-900 mb-2">Admin Dashboard</h1>
 	<p class="text-gray-600">
-		Welcome back, {$user?.profile?.display_name || 'Admin'}. Here's what's happening on your platform.
+		Welcome back, {$user?.email || 'Admin'}. Here's what's happening on your platform.
 	</p>
+	
+	<!-- RLS Warning Banner -->
+	<div class="mt-4 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+		<div class="flex">
+			<AlertCircle class="w-5 h-5 text-yellow-600 mr-2 flex-shrink-0 mt-0.5" />
+			<div class="flex-1">
+				<h3 class="text-sm font-medium text-yellow-800 mb-1">Database Policy Notice</h3>
+				<p class="text-sm text-yellow-700">
+					The events table has Row Level Security policy conflicts. Currently displaying demo data for events-related statistics and pending events. User data is loading normally.
+				</p>
+			</div>
+		</div>
+	</div>
 </div>
 
 {#if loading}
 	<LoadingSpinner variant="card" count={4} />
 {:else if error}
-	<ErrorDisplay 
-		{error} 
-		variant="banner"
-		on:retry={loadDashboardData}
-	/>
+	<div class="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+		<div class="flex">
+			<AlertCircle class="w-5 h-5 text-red-600 mr-2" />
+			<div class="flex-1">
+				<h3 class="text-sm font-medium text-red-800 mb-1">Loading Error</h3>
+				<p class="text-sm text-red-700">{error}</p>
+				<button
+					on:click={loadDashboardData}
+					class="mt-2 text-sm text-red-600 underline hover:text-red-700"
+				>
+					Try again
+				</button>
+			</div>
+		</div>
+	</div>
 {:else}
 	<!-- Stats Grid -->
 	<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -316,7 +212,12 @@ Main admin dashboard with overview statistics and quick actions
 		</div>
 
 		<!-- Total Events -->
-		<div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+		<div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 relative">
+			<div class="absolute top-2 right-2">
+				<span class="inline-flex items-center px-2 py-1 rounded-full text-xs bg-yellow-100 text-yellow-800">
+					Demo
+				</span>
+			</div>
 			<div class="flex items-center justify-between">
 				<div>
 					<p class="text-sm font-medium text-gray-600">Total Events</p>
@@ -334,7 +235,12 @@ Main admin dashboard with overview statistics and quick actions
 		</div>
 
 		<!-- Pending Events -->
-		<div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+		<div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 relative">
+			<div class="absolute top-2 right-2">
+				<span class="inline-flex items-center px-2 py-1 rounded-full text-xs bg-yellow-100 text-yellow-800">
+					Demo
+				</span>
+			</div>
 			<div class="flex items-center justify-between">
 				<div>
 					<p class="text-sm font-medium text-gray-600">Pending Approval</p>
@@ -348,7 +254,12 @@ Main admin dashboard with overview statistics and quick actions
 		</div>
 
 		<!-- Active Events -->
-		<div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+		<div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 relative">
+			<div class="absolute top-2 right-2">
+				<span class="inline-flex items-center px-2 py-1 rounded-full text-xs bg-yellow-100 text-yellow-800">
+					Demo
+				</span>
+			</div>
 			<div class="flex items-center justify-between">
 				<div>
 					<p class="text-sm font-medium text-gray-600">Active Events</p>
@@ -368,7 +279,12 @@ Main admin dashboard with overview statistics and quick actions
 		<div class="bg-white rounded-lg shadow-sm border border-gray-200">
 			<div class="p-6 border-b border-gray-200">
 				<div class="flex items-center justify-between">
-					<h2 class="text-lg font-semibold text-gray-900">Pending Events</h2>
+					<div class="flex items-center space-x-2">
+						<h2 class="text-lg font-semibold text-gray-900">Pending Events</h2>
+						<span class="inline-flex items-center px-2 py-1 rounded-full text-xs bg-yellow-100 text-yellow-800">
+							Demo Data
+						</span>
+					</div>
 					<a
 						href="/admin/events"
 						class="text-sm text-purple-600 hover:text-purple-700"
@@ -394,10 +310,10 @@ Main admin dashboard with overview statistics and quick actions
 										{event.title}
 									</h3>
 									<p class="text-sm text-gray-600 mt-1">
-										by {event.organizer?.display_name || event.organizer?.email}
+										ID: {event.organizer_id}
 									</p>
 									<p class="text-xs text-gray-500 mt-1">
-										{format(new Date(event.date), 'MMM d, yyyy • HH:mm')}
+										{format(new Date(event.date_time), 'MMM d, yyyy • HH:mm')}
 									</p>
 								</div>
 								

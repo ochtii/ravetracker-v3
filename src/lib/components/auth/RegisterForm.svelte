@@ -5,6 +5,8 @@
   import { registerSchema, validateForm, type RegisterData } from '$lib/validation/auth'
   import { supabase } from '$lib/utils/supabase'
 
+  export let inviteCode: string = ''
+
   const dispatch = createEventDispatcher<{
     success: { user: any }
     switch: { mode: 'login' }
@@ -58,7 +60,8 @@
       const result = await authActions.signUp(formData.email, formData.password, {
         ...(formData.firstName && { first_name: formData.firstName }),
         ...(formData.lastName && { last_name: formData.lastName }),
-        ...(formData.username && { username: formData.username })
+        ...(formData.username && { username: formData.username }),
+        ...(inviteCode && { invite_code: inviteCode })
       })
       
       if (result.data) {

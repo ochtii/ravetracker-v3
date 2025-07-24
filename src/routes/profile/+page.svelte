@@ -2,6 +2,7 @@
   import { onMount } from 'svelte'
   import { goto } from '$app/navigation'
   import { ProfileForm } from '$lib/components/auth'
+  import { VerificationBadge } from '$lib/components'
   import { user, profile } from '$lib/stores/auth'
   import { Button, Card } from '$lib/ui'
 
@@ -100,19 +101,32 @@
             </div>
 
             <!-- Basic Info -->
-            <h2 class="text-xl font-bold text-white mb-1">
-              {#if $profile?.first_name || $profile?.last_name}
-                {$profile.first_name || ''} {$profile.last_name || ''}
-              {:else}
-                {$user.email}
-              {/if}
-            </h2>
-            
-            {#if $profile?.username}
-              <p class="text-purple-400 mb-2">@{$profile.username}</p>
-            {/if}
+            <div class="flex items-start justify-between">
+              <div class="flex-1">
+                <h2 class="text-xl font-bold text-white mb-1">
+                  {#if $profile?.first_name || $profile?.last_name}
+                    {$profile.first_name || ''} {$profile.last_name || ''}
+                  {:else}
+                    {$user.email}
+                  {/if}
+                </h2>
+                
+                {#if $profile?.username}
+                  <p class="text-purple-400 mb-2">@{$profile.username}</p>
+                {/if}
 
-            <p class="text-white/60 text-sm mb-4">{$user.email}</p>
+                <p class="text-white/60 text-sm mb-4">{$user.email}</p>
+              </div>
+              
+              <!-- Verification Badge -->
+              <div class="flex-shrink-0 ml-4">
+                <VerificationBadge 
+                  level={($profile as any)?.verification_level || 'unverified'}
+                  size="md"
+                  on:verify-click={() => goto('/verify')}
+                />
+              </div>
+            </div>
 
             {#if $profile?.bio}
               <p class="text-white/80 text-sm italic">{$profile.bio}</p>
@@ -221,6 +235,57 @@
                 <span class="text-white">
                   {$user.last_sign_in_at ? new Date($user.last_sign_in_at).toLocaleDateString('de-DE') : 'Nie'}
                 </span>
+              </div>
+            </div>
+          </Card>
+
+          <!-- Invite Management -->
+          <Card variant="glass">
+            <h3 class="text-lg font-semibold text-white mb-4 flex items-center">
+              <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" />
+              </svg>
+              Invite-Management
+            </h3>
+
+            <div class="space-y-4">
+              <div class="flex items-center justify-between">
+                <div>
+                  <p class="text-white font-medium">Verfügbare Credits</p>
+                  <p class="text-white/70 text-sm">Erstelle Invite-Codes um Freunde einzuladen</p>
+                </div>
+                <div class="text-right">
+                  <div class="text-2xl font-bold text-purple-400">
+                    {($profile as any)?.invite_credits || 0}
+                  </div>
+                  <div class="text-xs text-white/50">Credits</div>
+                </div>
+              </div>
+              
+              <div class="flex gap-3">
+                <Button
+                  variant="primary"
+                  onclick={() => goto('/profile/invites')}
+                  class="flex-1"
+                >
+                  <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                  </svg>
+                  Invites verwalten
+                </Button>
+                
+                {#if (($profile as any)?.verification_level === 'unverified')}
+                  <Button
+                    variant="secondary"
+                    onclick={() => goto('/profile/verification')}
+                    class="flex-shrink-0"
+                    title="Verifizierung für mehr Credits"
+                  >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </Button>
+                {/if}
               </div>
             </div>
           </Card>

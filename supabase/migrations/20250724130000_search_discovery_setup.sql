@@ -29,7 +29,8 @@ ADD COLUMN IF NOT EXISTS search_history jsonb DEFAULT '[]';
 UPDATE events SET search_vector = 
   setweight(to_tsvector('english', coalesce(title, '')), 'A') ||
   setweight(to_tsvector('english', coalesce(description, '')), 'B') ||
-  setweight(to_tsvector('english', coalesce(location, '')), 'C') ||
+  setweight(to_tsvector('english', coalesce(location_name, '')), 'C') ||
+  setweight(to_tsvector('english', coalesce(location_city, '')), 'C') ||
   setweight(to_tsvector('english', coalesce(array_to_string(search_tags, ' '), '')), 'D');
 
 -- Update search vectors for profiles
@@ -47,7 +48,7 @@ CREATE INDEX IF NOT EXISTS idx_profiles_search_vector ON profiles USING gin(sear
 
 -- Trigram indexes for autocomplete
 CREATE INDEX IF NOT EXISTS idx_events_title_trgm ON events USING gin(title gin_trgm_ops);
-CREATE INDEX IF NOT EXISTS idx_events_location_trgm ON events USING gin(location gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_events_location_trgm ON events USING gin(location_name gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS idx_profiles_username_trgm ON profiles USING gin(username gin_trgm_ops);
 
 -- Geospatial indexes
@@ -55,7 +56,7 @@ CREATE INDEX IF NOT EXISTS idx_events_location_point ON events USING gist(locati
 
 -- Search optimization indexes
 CREATE INDEX IF NOT EXISTS idx_events_popularity ON events(popularity_score DESC);
-CREATE INDEX IF NOT EXISTS idx_events_date_popularity ON events(date, popularity_score DESC);
+CREATE INDEX IF NOT EXISTS idx_events_date_popularity ON events(date_time, popularity_score DESC);
 CREATE INDEX IF NOT EXISTS idx_events_tags ON events USING gin(search_tags);
 
 -- ===================================
@@ -134,7 +135,8 @@ BEGIN
   NEW.search_vector := 
     setweight(to_tsvector('english', coalesce(NEW.title, '')), 'A') ||
     setweight(to_tsvector('english', coalesce(NEW.description, '')), 'B') ||
-    setweight(to_tsvector('english', coalesce(NEW.location, '')), 'C') ||
+    setweight(to_tsvector('english', coalesce(NEW.location_name, '')), 'C') ||
+    setweight(to_tsvector('english', coalesce(NEW.location_city, '')), 'C') ||
     setweight(to_tsvector('english', coalesce(array_to_string(NEW.search_tags, ' '), '')), 'D');
   
   -- Update location point if coordinates provided

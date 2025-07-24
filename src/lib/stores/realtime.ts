@@ -6,14 +6,13 @@
 
 import { writable, derived, get } from 'svelte/store'
 import { browser } from '$app/environment'
+import { dev } from '$app/environment'
 import { 
 	realtimeManager, 
 	connectionStatus,
-	subscribeToEvents,
-	subscribeToUserNotifications,
-	unsubscribeFromTable,
-	type SubscriptionConfig
+	unsubscribeFromTable
 } from '$lib/utils/realtime'
+import { devRealtimeManager, devRealtimeState } from '$lib/utils/realtime-dev'
 import { user } from '$lib/stores/auth-enhanced'
 
 // Types
@@ -126,14 +125,16 @@ class RealtimeActions {
 				enabled: true 
 			}))
 
-			// Subscribe to user-specific features if logged in
-			const currentUser = get(user)
-			if (currentUser) {
-				await this.enableUserFeatures(currentUser.id)
-			}
+			// For now, we'll only enable basic realtime features that are guaranteed to work
+			// Full event and notification subscriptions will be enabled once proper database setup is complete
+			console.log('Basic realtime features enabled')
 
-			// Subscribe to global events
-			await this.enableEventUpdates()
+			// TODO: Re-enable these when database tables are properly configured
+			// const currentUser = get(user)
+			// if (currentUser) {
+			// 	await this.enableUserFeatures(currentUser.id)
+			// }
+			// await this.enableEventUpdates()
 
 		} catch (error) {
 			console.error('Failed to enable realtime:', error)
@@ -179,14 +180,19 @@ class RealtimeActions {
 		if (!browser) return
 
 		try {
-			await subscribeToEvents(
-				(payload) => this.handleEventUpdate(payload),
-				(error) => console.error('Events subscription error:', error)
-			)
+			// Only enable events subscription if table exists and is configured for realtime
+			// For now, we'll disable this to prevent errors during development
+			console.log('Event subscriptions temporarily disabled during development')
+			
+			// Uncomment when events table is properly configured for realtime:
+			// await subscribeToEvents(
+			// 	(payload) => this.handleEventUpdate(payload),
+			// 	(error) => console.error('Events subscription error:', error)
+			// )
 
 			realtimeState.update(state => ({
 				...state,
-				features: { ...state.features, events: true }
+				features: { ...state.features, events: false } // Set to false for now
 			}))
 
 		} catch (error) {
@@ -201,18 +207,22 @@ class RealtimeActions {
 		if (!browser) return
 
 		try {
-			// Subscribe to notifications
-			await subscribeToUserNotifications(
-				userId,
-				(payload) => this.handleNotificationUpdate(payload),
-				(error) => console.error('Notifications subscription error:', error)
-			)
+			// Only enable notifications subscription if table exists and is configured for realtime
+			// For now, we'll disable this to prevent errors during development
+			console.log(`User notifications subscriptions temporarily disabled during development for user: ${userId}`)
+			
+			// Uncomment when notifications table is properly configured for realtime:
+			// await subscribeToUserNotifications(
+			// 	userId,
+			// 	(payload) => this.handleNotificationUpdate(payload),
+			// 	(error) => console.error('Notifications subscription error:', error)
+			// )
 
 			realtimeState.update(state => ({
 				...state,
 				features: { 
 					...state.features, 
-					notifications: true 
+					notifications: false // Set to false for now
 				}
 			}))
 
@@ -309,7 +319,6 @@ class RealtimeActions {
 				icon: '/icon-192x192.png',
 				badge: '/icon-192x192.png',
 				tag: 'ravetracker',
-				renotify: true,
 				requireInteraction: false,
 				...options
 			})
@@ -383,6 +392,10 @@ class RealtimeActions {
 	}
 
 	// Private methods
+	/**
+	 * Handle event updates (will be used when realtime subscriptions are re-enabled)
+	 */
+	// eslint-disable-next-line @typescript-eslint/no-unused-vars
 	private handleEventUpdate(payload: any): void {
 		const update: LiveUpdate = {
 			id: `event-${payload.new?.id || payload.old?.id}-${Date.now()}`,
@@ -404,6 +417,10 @@ class RealtimeActions {
 		}
 	}
 
+	/**
+	 * Handle notification updates (will be used when realtime subscriptions are re-enabled)
+	 */
+	// eslint-disable-next-line @typescript-eslint/no-unused-vars
 	private handleNotificationUpdate(payload: any): void {
 		const update: LiveUpdate = {
 			id: `notification-${payload.new?.id || payload.old?.id}-${Date.now()}`,

@@ -1,0 +1,12 @@
+{
+  "name": "@ravetracker/create-test-users",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "create-users": "tsx create-test-users.ts"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.0",
+    "tsx": "^4.7.0"
+  }
+}
