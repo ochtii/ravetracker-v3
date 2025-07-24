@@ -20,33 +20,38 @@ jobs:
     
     steps:
     - name: Check Required Secrets
+      env:
+        HOST_SET: ${{ secrets.HOST != '' }}
+        USERNAME_SET: ${{ secrets.USERNAME != '' }}
+        SSH_KEY_SET: ${{ secrets.SSH_KEY != '' }}
+        PORT_SET: ${{ secrets.PORT != '' }}
       run: |
         echo "🔍 Checking GitHub Secrets Configuration..."
         echo "=========================================="
         
         # Check if secrets are set (without revealing values)
-        if [ -z "${{ secrets.HOST }}" ]; then
+        if [ "$HOST_SET" = "false" ]; then
           echo "❌ HOST secret is missing or empty"
           echo "💡 Please set HOST in GitHub repository settings > Secrets and variables > Actions"
         else
           echo "✅ HOST secret is configured"
         fi
         
-        if [ -z "${{ secrets.USERNAME }}" ]; then
+        if [ "$USERNAME_SET" = "false" ]; then
           echo "❌ USERNAME secret is missing or empty"
           echo "💡 Please set USERNAME in GitHub repository settings"
         else
           echo "✅ USERNAME secret is configured"
         fi
         
-        if [ -z "${{ secrets.SSH_KEY }}" ]; then
+        if [ "$SSH_KEY_SET" = "false" ]; then
           echo "❌ SSH_KEY secret is missing or empty"
           echo "💡 Please set SSH_KEY in GitHub repository settings"
         else
           echo "✅ SSH_KEY secret is configured"
         fi
         
-        if [ -z "${{ secrets.PORT }}" ]; then
+        if [ "$PORT_SET" = "false" ]; then
           echo "⚠️ PORT secret not set (will default to 22)"
         else
           echo "✅ PORT secret is configured"
@@ -62,10 +67,10 @@ jobs:
   test-connection:
     needs: check-secrets
     runs-on: ubuntu-latest
-    if: "${{ secrets.HOST != '' && secrets.USERNAME != '' && secrets.SSH_KEY != '' }}"
     
     steps:
     - name: Test Basic SSH Connection
+      if: ${{ secrets.HOST != '' }}
       uses: appleboy/ssh-action@v1.0.0
       with:
         host: ${{ secrets.HOST }}
@@ -96,6 +101,12 @@ jobs:
             sudo chown $USER:$USER /var/www/ravetracker-v3
             echo "✅ Directory created"
           fi
+          
+    - name: Connection Failed
+      if: ${{ secrets.HOST == '' }}
+      run: |
+        echo "❌ Cannot test SSH connection - HOST secret is not configured"
+        echo "💡 Please configure all required secrets first"
 
   deploy-temp-build:
     needs: test-connection
@@ -104,6 +115,7 @@ jobs:
     
     steps:
     - name: Deploy temp_build
+      if: ${{ secrets.HOST != '' }}
       uses: appleboy/ssh-action@v1.0.0
       with:
         host: ${{ secrets.HOST }}
