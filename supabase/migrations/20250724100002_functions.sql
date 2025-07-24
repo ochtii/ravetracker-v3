@@ -780,7 +780,8 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 CREATE OR REPLACE FUNCTION cleanup_old_notifications()
 RETURNS INTEGER AS $$
 DECLARE
-    deleted_count INTEGER;
+    deleted_count INTEGER := 0;
+    temp_count INTEGER;
 BEGIN
     -- Delete read notifications older than 90 days
     DELETE FROM notifications 
@@ -788,7 +789,8 @@ BEGIN
         read = TRUE 
         AND read_at < NOW() - INTERVAL '90 days';
     
-    GET DIAGNOSTICS deleted_count = ROW_COUNT;
+    GET DIAGNOSTICS temp_count = ROW_COUNT;
+    deleted_count := deleted_count + temp_count;
     
     -- Delete unread notifications older than 1 year
     DELETE FROM notifications 
@@ -796,7 +798,8 @@ BEGIN
         read = FALSE 
         AND created_at < NOW() - INTERVAL '1 year';
     
-    GET DIAGNOSTICS deleted_count = deleted_count + ROW_COUNT;
+    GET DIAGNOSTICS temp_count = ROW_COUNT;
+    deleted_count := deleted_count + temp_count;
     
     RETURN deleted_count;
 END;

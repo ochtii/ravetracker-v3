@@ -5,9 +5,14 @@
   import { goto } from '$app/navigation'
   import EventList from '$lib/components/events/EventList.svelte'
   import EventFilters from '$lib/components/events/EventFilters.svelte'
+  import AdvancedSearch from '$lib/components/search/AdvancedSearch.svelte'
+  import SearchResults from '$lib/components/search/SearchResults.svelte'
+  import Recommendations from '$lib/components/search/Recommendations.svelte'
   import { user } from '$lib/stores/auth'
   import { events, featuredEvents, eventActions } from '$lib/stores/events'
   import { searchQuery } from '$lib/stores/events'
+  import { searchService, searchFilters, searchState } from '$lib/stores/search'
+  import { Search, TrendingUp, Calendar, Filter, Map } from 'lucide-svelte'
   import type { PageData } from './$types'
 
   export let data: PageData = {} as any
@@ -15,25 +20,42 @@
   let showFilters = false
   let showMap = false
   let showAdvanced = false
-  let currentView: 'featured' | 'all' | 'map' = 'featured'
+  let currentView: 'featured' | 'search' | 'recommendations' | 'map' = 'featured'
+
+  // Reactive values
+  $: searchResults = $searchState.results
+  $: isSearchLoading = $searchState.isLoading
+  $: hasSearchResults = searchResults.length > 0
+  $: searchQueryValue = $searchFilters.query
 
   // Reactive search from URL params
   $: if (browser && $page.url.searchParams.get('q')) {
     const query = $page.url.searchParams.get('q') || ''
     searchQuery.set(query)
+    searchService.updateFilter('query', query)
+    currentView = 'search'
+    performSearch()
   }
 
   const toggleFilters = () => {
     showFilters = !showFilters
   }
 
-  const switchView = (view: 'featured' | 'all' | 'map') => {
+  const switchView = (view: 'featured' | 'search' | 'recommendations' | 'map') => {
     currentView = view
     if (view === 'featured') {
       eventActions.loadFeaturedEvents()
-    } else if (view === 'all') {
-      eventActions.loadEvents({ reset: true })
+    } else if (view === 'search') {
+      // Initialize search if not already done
+      if (!hasSearchResults && !searchQueryValue) {
+        searchService.updateFilter('status', 'approved')
+        performSearch()
+      }
     }
+  }
+
+  async function performSearch() {
+    await searchService.searchEvents($searchFilters)
   }
 
   onMount(() => {
@@ -44,10 +66,19 @@
     
     // Handle URL search parameters
     const urlQuery = $page.url.searchParams.get('q')
-    if (urlQuery) {
-      searchQuery.set(urlQuery)
-      currentView = 'all'
-      eventActions.loadEvents({ reset: true })
+    const urlLocation = $page.url.searchParams.get('location')
+    const urlTags = $page.url.searchParams.get('tags')
+    
+    if (urlQuery || urlLocation || urlTags) {
+      if (urlQuery) searchService.updateFilter('query', urlQuery)
+      if (urlLocation) searchService.updateFilter('location', urlLocation)
+      if (urlTags) searchService.updateFilter('tags', urlTags.split(','))
+      
+      currentView = 'search'
+      performSearch()
+    } else if ($user) {
+      // Show recommendations for logged-in users
+      currentView = 'recommendations'
     }
   })
 </script>
@@ -94,18 +125,32 @@
             Featured
           </button>
           <button
-            on:click={() => switchView('all')}
-            class={`px-6 py-3 rounded-lg font-medium transition-all duration-200 ${
-              currentView === 'all'
+            on:click={() => switchView('search')}
+            class={`flex items-center gap-2 px-6 py-3 rounded-lg font-medium transition-all duration-200 ${
+              currentView === 'search'
                 ? 'bg-purple-600 text-white shadow-lg'
                 : 'text-gray-300 hover:text-white hover:bg-white/10'
             }`}
           >
-            Alle Events
+            <Search size={16} />
+            Search
           </button>
+          {#if $user}
+            <button
+              on:click={() => switchView('recommendations')}
+              class={`flex items-center gap-2 px-6 py-3 rounded-lg font-medium transition-all duration-200 ${
+                currentView === 'recommendations'
+                  ? 'bg-purple-600 text-white shadow-lg'
+                  : 'text-gray-300 hover:text-white hover:bg-white/10'
+              }`}
+            >
+              <TrendingUp size={16} />
+              For You
+            </button>
+          {/if}
           <button
             on:click={() => switchView('map')}
-            class={`px-6 py-3 rounded-lg font-medium transition-all duration-200 ${
+            class={`flex items-center gap-2 px-6 py-3 rounded-lg font-medium transition-all duration-200 ${
               currentView === 'map'
                 ? 'bg-purple-600 text-white shadow-lg'
                 : 'text-gray-300 hover:text-white hover:bg-white/10'
@@ -113,7 +158,8 @@
             disabled
             title="Kartenansicht kommt bald"
           >
-            Karte
+            <Map size={16} />
+            Map
           </button>
         </div>
 
@@ -150,10 +196,15 @@
 
   <!-- Content -->
   <div class="container mx-auto px-4 pb-16">
-    <!-- Filters -->
-    {#if showFilters}
-      <div class="mb-8">
-        <EventFilters {showAdvanced} />
+    <!-- Search Interface -->
+    {#if currentView === 'search'}
+      <div class="mb-8 bg-white/5 backdrop-blur-sm rounded-xl p-6">
+        <AdvancedSearch 
+          placeholder="Search events, artists, genres, or locations..."
+          showFilters={true}
+          showLocation={true}
+          autoFocus={false}
+        />
       </div>
     {/if}
 
@@ -161,10 +212,17 @@
     <div class="bg-white/5 backdrop-blur-sm rounded-lg p-4 mb-8">
       <div class="flex flex-wrap items-center justify-between gap-4">
         <div class="flex items-center gap-6">
-          <div class="text-center">
-            <div class="text-2xl font-bold text-white">{$events.length}</div>
-            <div class="text-sm text-gray-400">Events gefunden</div>
-          </div>
+          {#if currentView === 'search'}
+            <div class="text-center">
+              <div class="text-2xl font-bold text-white">{searchResults.length}</div>
+              <div class="text-sm text-gray-400">Search Results</div>
+            </div>
+          {:else}
+            <div class="text-center">
+              <div class="text-2xl font-bold text-white">{$events.length}</div>
+              <div class="text-sm text-gray-400">Events gefunden</div>
+            </div>
+          {/if}
           
           {#if currentView === 'featured' && $featuredEvents.length > 0}
             <div class="text-center">
@@ -192,15 +250,42 @@
       </div>
     </div>
 
-    <!-- Event Lists -->
-    {#if currentView === 'featured'}
+    <!-- Content Sections -->
+    {#if currentView === 'search'}
+      <!-- Search Results -->
+      <div class="bg-white/5 backdrop-blur-sm rounded-xl p-6">
+        <SearchResults 
+          showLoadMore={true}
+          showDistance={true}
+          showInteractions={true}
+        />
+      </div>
+    {:else if currentView === 'recommendations'}
+      <!-- Recommendations -->
+      <div class="space-y-8">
+        <div class="bg-white/5 backdrop-blur-sm rounded-xl p-6">
+          <Recommendations 
+            type="content"
+            showType={true}
+            limit={6}
+          />
+        </div>
+        <div class="bg-white/5 backdrop-blur-sm rounded-xl p-6">
+          <Recommendations 
+            type="collaborative"
+            showType={true}
+            limit={6}
+          />
+        </div>
+      </div>
+    {:else if currentView === 'featured'}
       <!-- Featured Events -->
       {#if $featuredEvents.length > 0}
         <div class="mb-12">
           <div class="flex items-center justify-between mb-6">
             <h2 class="text-3xl font-bold text-white">Featured Events</h2>
             <button
-              on:click={() => switchView('all')}
+              on:click={() => switchView('search')}
               class="text-purple-400 hover:text-purple-300 transition-colors font-medium"
             >
               Alle anzeigen →

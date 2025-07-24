@@ -241,16 +241,4 @@
       Passwort vergessen?
     </button>
     
-    <div class="text-sm text-white/70">
-      Noch kein Account?
-      <button
-        type="button"
-        class="text-primary-400 hover:text-primary-300 transition-colors font-medium"
-        on:click={() => dispatch('switch', { mode: 'register' })}
-        disabled={loading}
-      >
-        Jetzt registrieren
-      </button>
-    </div>
-  </div>
 </Card>

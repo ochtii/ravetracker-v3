@@ -3,7 +3,7 @@
 	import { fly, fade } from 'svelte/transition';
 	import { quintOut } from 'svelte/easing';
 	import { goto } from '$app/navigation';
-	import { userStore } from '$lib/stores/user';
+	import { authActions } from '$lib/stores/auth';
 	
 	export let user: any;
 	
@@ -13,7 +13,7 @@
 	let dropdownElement: HTMLElement;
 	
 	$: userInitials = getUserInitials(user);
-	$: userRole = user?.is_organizer ? 'organizer' : 'user';
+	$: userRole = user?.user_metadata?.role || 'user';
 	
 	function getUserInitials(user: any): string {
 		if (!user) return 'U';
@@ -40,8 +40,8 @@
 	
 	async function handleLogout() {
 		try {
-			// Call your logout function here
-			await userStore.logout();
+			// Use the real Supabase auth logout
+			await authActions.signOut();
 			closeDropdown();
 			goto('/');
 		} catch (error) {

@@ -2,7 +2,7 @@
 	import '../app.css';
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
-	import { userStore } from '$lib/stores/user';
+	import { authActions, user, loading } from '$lib/stores/auth';
 	import { notificationStore } from '$lib/stores/notifications';
 	import Header from '$lib/components/layout/Header.svelte';
 	import Sidebar from '$lib/components/layout/Sidebar.svelte';
@@ -11,11 +11,12 @@
 	let pageLoading = false;
 	
 	// Subscribe to stores
-	$: user = $userStore;
+	$: currentUser = $user;
 	$: currentPath = $page.url.pathname;
+	$: isLoading = $loading;
 	
 	// Determine if sidebar should be shown
-	$: showSidebar = user && !isAuthPage(currentPath);
+	$: showSidebar = currentUser && !isAuthPage(currentPath);
 	
 	function isAuthPage(path: string): boolean {
 		return path.startsWith('/auth/') || path === '/auth';
@@ -39,23 +40,16 @@
 	
 	// Initialize stores on mount
 	onMount(async () => {
-		// Initialize user store
-		await userStore.initialize();
+		// Initialize auth system
+		await authActions.initialize();
 		
-		// Load mock notifications for demo
-		if ($userStore) {
+		// Add welcome notification for authenticated users
+		if ($user) {
 			notificationStore.addNotification({
-				type: 'event',
-				title: 'New Event Alert',
-				message: 'Tomorrowland 2024 tickets are now available!',
+				type: 'info',
+				title: 'Willkommen zurück!',
+				message: 'Du bist erfolgreich angemeldet.',
 				timestamp: new Date().toISOString()
-			});
-			
-			notificationStore.addNotification({
-				type: 'follow',
-				title: 'New Follower',
-				message: 'DJ Martin Garrix started following you',
-				timestamp: new Date(Date.now() - 3600000).toISOString()
 			});
 		}
 	});

@@ -7,7 +7,7 @@
 	import UserDropdown from './UserDropdown.svelte';
 	import SearchBar from './SearchBar.svelte';
 	import NotificationBell from './NotificationBell.svelte';
-	import { userStore } from '$lib/stores/user';
+	import { user } from '$lib/stores/auth';
 	import { notificationStore } from '$lib/stores/notifications';
 	
 	let mobileMenuOpen = false;
@@ -16,7 +16,7 @@
 	let headerElement: HTMLElement;
 	
 	// Subscribe to stores
-	$: user = $userStore;
+	$: currentUser = $user;
 	$: notifications = $notificationStore;
 	$: unreadCount = notifications.filter(n => !n.read).length;
 	
@@ -114,13 +114,13 @@
 				</button>
 
 				<!-- Notifications -->
-				{#if user}
+				{#if currentUser}
 					<NotificationBell {unreadCount} />
 				{/if}
 
 				<!-- User Dropdown -->
-				{#if user}
-					<UserDropdown {user} />
+				{#if currentUser}
+					<UserDropdown user={currentUser} />
 				{:else}
 					<div class="flex items-center space-x-2">
 						<a

@@ -42,12 +42,12 @@ ALTER TABLE event_images ENABLE ROW LEVEL SECURITY;
 -- =====================================================
 
 -- Function to check if user is admin
-CREATE OR REPLACE FUNCTION auth.is_admin(user_uuid UUID DEFAULT auth.uid())
+CREATE OR REPLACE FUNCTION is_admin(user_uuid UUID DEFAULT auth.uid())
 RETURNS BOOLEAN AS $$
 BEGIN
     RETURN EXISTS (
-        SELECT 1 FROM profiles 
-        WHERE user_id = user_uuid 
+        SELECT 1 FROM profiles
+        WHERE user_id = user_uuid
         AND (
             (social_links->>'role')::text = 'admin' OR
             (social_links->>'role')::text = 'super_admin'
@@ -57,7 +57,7 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Function to check if user is moderator
-CREATE OR REPLACE FUNCTION auth.is_moderator(user_uuid UUID DEFAULT auth.uid())
+CREATE OR REPLACE FUNCTION is_moderator(user_uuid UUID DEFAULT auth.uid())
 RETURNS BOOLEAN AS $$
 BEGIN
     RETURN EXISTS (
@@ -71,7 +71,7 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Function to check if user is event organizer
-CREATE OR REPLACE FUNCTION auth.is_event_organizer(event_uuid UUID, user_uuid UUID DEFAULT auth.uid())
+CREATE OR REPLACE FUNCTION is_event_organizer(event_uuid UUID, user_uuid UUID DEFAULT auth.uid())
 RETURNS BOOLEAN AS $$
 BEGIN
     RETURN EXISTS (
@@ -84,7 +84,7 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Function to check if user is verified organizer
-CREATE OR REPLACE FUNCTION auth.is_verified_organizer(user_uuid UUID DEFAULT auth.uid())
+CREATE OR REPLACE FUNCTION is_verified_organizer(user_uuid UUID DEFAULT auth.uid())
 RETURNS BOOLEAN AS $$
 BEGIN
     RETURN EXISTS (
@@ -97,7 +97,7 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Function to check if user can view event
-CREATE OR REPLACE FUNCTION auth.can_view_event(event_uuid UUID, user_uuid UUID DEFAULT auth.uid())
+CREATE OR REPLACE FUNCTION can_view_event(event_uuid UUID, user_uuid UUID DEFAULT auth.uid())
 RETURNS BOOLEAN AS $$
 DECLARE
     event_record RECORD;
@@ -117,7 +117,7 @@ BEGIN
     END IF;
     
     -- Event organizers can always view their events
-    IF auth.is_event_organizer(event_uuid, user_uuid) THEN
+    IF is_event_organizer(event_uuid, user_uuid) THEN
         RETURN TRUE;
     END IF;
     
@@ -149,7 +149,7 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Function to check if user can edit event
-CREATE OR REPLACE FUNCTION auth.can_edit_event(event_uuid UUID, user_uuid UUID DEFAULT auth.uid())
+CREATE OR REPLACE FUNCTION can_edit_event(event_uuid UUID, user_uuid UUID DEFAULT auth.uid())
 RETURNS BOOLEAN AS $$
 BEGIN
     -- Admins can edit all events
@@ -158,7 +158,7 @@ BEGIN
     END IF;
     
     -- Event organizers can edit their own events
-    IF auth.is_event_organizer(event_uuid, user_uuid) THEN
+    IF is_event_organizer(event_uuid, user_uuid) THEN
         RETURN TRUE;
     END IF;
     
@@ -183,7 +183,7 @@ CREATE POLICY "Public profiles are viewable" ON profiles
     FOR SELECT USING (
         NOT is_private OR 
         auth.uid() = user_id OR
-        auth.is_admin()
+        is_admin()
     );
 
 -- Organizers are always publicly viewable (for event info)
@@ -198,19 +198,19 @@ CREATE POLICY "Users can insert own profile" ON profiles
 CREATE POLICY "Users can update own profile" ON profiles
     FOR UPDATE USING (
         auth.uid() = user_id OR
-        auth.is_admin()
+        is_admin()
     );
 
 -- Users can delete their own profile (cascade will handle cleanup)
 CREATE POLICY "Users can delete own profile" ON profiles
     FOR DELETE USING (
         auth.uid() = user_id OR
-        auth.is_admin()
+        is_admin()
     );
 
 -- Admins can manage all profiles
 CREATE POLICY "Admins can manage all profiles" ON profiles
-    FOR ALL USING (auth.is_admin());
+    FOR ALL USING (is_admin());
 
 -- =====================================================
 -- EVENT CATEGORIES POLICIES
@@ -226,7 +226,7 @@ CREATE POLICY "Authenticated users can view all categories" ON event_categories
 
 -- Only admins and moderators can manage categories
 CREATE POLICY "Admins can manage categories" ON event_categories
-    FOR ALL USING (auth.is_moderator());
+    FOR ALL USING (is_moderator());
 
 -- =====================================================
 -- EVENTS TABLE POLICIES
@@ -258,12 +258,12 @@ CREATE POLICY "Attendees can view their events" ON events
 
 -- Event organizers can view all their events (any status)
 CREATE POLICY "Organizers can view own events" ON events
-    FOR SELECT USING (auth.can_view_event(id));
+    FOR SELECT USING (can_view_event(id));
 
 -- Verified organizers can create events
 CREATE POLICY "Verified organizers can create events" ON events
     FOR INSERT WITH CHECK (
-        auth.is_verified_organizer() AND
+        is_verified_organizer() AND
         EXISTS (
             SELECT 1 FROM profiles 
             WHERE id = organizer_id 
@@ -273,11 +273,11 @@ CREATE POLICY "Verified organizers can create events" ON events
 
 -- Organizers can update their own events, admins can update all
 CREATE POLICY "Organizers can update own events" ON events
-    FOR UPDATE USING (auth.can_edit_event(id));
+    FOR UPDATE USING (can_edit_event(id));
 
 -- Organizers can delete their own events, admins can delete all
 CREATE POLICY "Organizers can delete own events" ON events
-    FOR DELETE USING (auth.can_edit_event(id));
+    FOR DELETE USING (can_edit_event(id));
 
 -- =====================================================
 -- EVENT ATTENDANCE POLICIES
@@ -292,7 +292,7 @@ CREATE POLICY "Users can create own attendance" ON event_attendance
     FOR INSERT WITH CHECK (
         user_id = auth.uid() AND
         -- Can only attend events they can view
-        auth.can_view_event(event_id)
+        can_view_event(event_id)
     );
 
 -- Users can update their own attendance
@@ -306,13 +306,13 @@ CREATE POLICY "Users can delete own attendance" ON event_attendance
 -- Event organizers can view attendance for their events
 CREATE POLICY "Organizers can view event attendance" ON event_attendance
     FOR SELECT USING (
-        auth.is_event_organizer(event_id) OR
-        auth.is_admin()
+        is_event_organizer(event_id) OR
+        is_admin()
     );
 
 -- Admins can manage all attendance
 CREATE POLICY "Admins can manage all attendance" ON event_attendance
-    FOR ALL USING (auth.is_admin());
+    FOR ALL USING (is_admin());
 
 -- =====================================================
 -- NOTIFICATIONS POLICIES
@@ -337,15 +337,15 @@ CREATE POLICY "System can create notifications" ON notifications
         -- Event organizers can send notifications about their events
         (
             event_id IS NOT NULL AND
-            auth.is_event_organizer(event_id)
+            is_event_organizer(event_id)
         ) OR
         -- Admins can send notifications
-        auth.is_admin()
+        is_admin()
     );
 
 -- Admins can manage all notifications
 CREATE POLICY "Admins can manage all notifications" ON notifications
-    FOR ALL USING (auth.is_admin());
+    FOR ALL USING (is_admin());
 
 -- =====================================================
 -- EVENT IMAGES POLICIES
@@ -355,52 +355,47 @@ CREATE POLICY "Admins can manage all notifications" ON notifications
 CREATE POLICY "Public can view approved event images" ON event_images
     FOR SELECT USING (
         is_approved = TRUE AND
-        auth.can_view_event(event_id)
+        can_view_event(event_id)
     );
 
 -- Event organizers can view all images for their events
 CREATE POLICY "Organizers can view own event images" ON event_images
     FOR SELECT USING (
-        auth.is_event_organizer(event_id) OR
-        auth.is_admin()
+        is_event_organizer(event_id) OR
+        is_admin()
     );
 
 -- Event organizers can add images to their events
 CREATE POLICY "Organizers can add event images" ON event_images
     FOR INSERT WITH CHECK (
-        auth.is_event_organizer(event_id) OR
-        auth.is_admin()
+        is_event_organizer(event_id) OR
+        is_admin()
     );
 
 -- Event organizers can update images for their events
 CREATE POLICY "Organizers can update own event images" ON event_images
     FOR UPDATE USING (
-        auth.is_event_organizer(event_id) OR
-        auth.is_admin()
+        is_event_organizer(event_id) OR
+        is_admin()
     );
 
 -- Event organizers can delete images for their events
 CREATE POLICY "Organizers can delete own event images" ON event_images
     FOR DELETE USING (
-        auth.is_event_organizer(event_id) OR
-        auth.is_admin()
+        is_event_organizer(event_id) OR
+        is_admin()
     );
 
 -- Moderators can approve/reject images
 CREATE POLICY "Moderators can moderate images" ON event_images
-    FOR UPDATE USING (
-        auth.is_moderator() AND
-        -- Only allow updating approval status
-        OLD.event_id = NEW.event_id AND
-        OLD.url = NEW.url
-    );
+    FOR UPDATE USING (is_moderator());
 
 -- =====================================================
 -- SECURITY TESTING AND VALIDATION
 -- =====================================================
 
 -- Function to test user permissions
-CREATE OR REPLACE FUNCTION auth.test_user_permissions(test_user_id UUID)
+CREATE OR REPLACE FUNCTION test_user_permissions(test_user_id UUID)
 RETURNS TABLE (
     test_name TEXT,
     can_access BOOLEAN,
@@ -435,7 +430,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- =====================================================
 
 -- Function to log security events
-CREATE OR REPLACE FUNCTION auth.log_security_event(
+CREATE OR REPLACE FUNCTION log_security_event(
     event_type TEXT,
     user_uuid UUID,
     resource_type TEXT,

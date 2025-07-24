@@ -15,9 +15,8 @@
 
   // Handle successful registration
   function handleRegisterSuccess(event: CustomEvent) {
-    // After registration, redirect to email verification or dashboard
-    const redirectTo = $page.url.searchParams.get('redirectTo') || '/dashboard'
-    goto(redirectTo, { replaceState: true })
+    // After registration, show email confirmation message
+    goto('/auth/confirm-email-sent', { replaceState: true })
   }
 </script>
 

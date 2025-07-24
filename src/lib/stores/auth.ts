@@ -396,42 +396,102 @@ export const authActions = {
   // Clear error
   clearError: () => {
     error.set(null)
+  },
+
+  // Confirm email with token
+  confirmEmail: async (token: string, type: string = 'signup') => {
+    loading.set(true)
+    error.set(null)
+
+    try {
+      const { data, error: confirmError } = await supabase.auth.verifyOtp({
+        token_hash: token,
+        type: type as any
+      })
+
+      if (confirmError) {
+        throw confirmError
+      }
+
+      // Refresh auth state after confirmation
+      await authActions.initialize()
+
+      return { data, error: null }
+    } catch (err) {
+      console.error('Email confirmation error:', err)
+      error.set(err as AuthError)
+      return { data: null, error: err as AuthError }
+    } finally {
+      loading.set(false)
+    }
+  },
+
+  // Resend confirmation email
+  resendConfirmation: async (email: string) => {
+    loading.set(true)
+    error.set(null)
+
+    try {
+      const { error: resendError } = await supabase.auth.resend({
+        type: 'signup',
+        email: email
+      })
+
+      if (resendError) {
+        throw resendError
+      }
+
+      return { error: null }
+    } catch (err) {
+      console.error('Resend confirmation error:', err)
+      error.set(err as AuthError)
+      return { error: err as AuthError }
+    } finally {
+      loading.set(false)
+    }
   }
 }
 
 // Helper functions
 async function loadUserProfile(userId: string) {
   try {
+    // First try to get the profile directly
     const { data, error: profileError } = await supabase
       .from('profiles')
       .select('*')
       .eq('user_id', userId)
-      .single()
+      .maybeSingle() // Use maybeSingle to avoid error when no rows
 
     if (profileError) {
       console.error('Error loading profile:', profileError)
-      
-      // If profile doesn't exist, create one
-      if (profileError.code === 'PGRST116') {
-        const { data: newProfile, error: createError } = await supabase
-          .from('profiles')
-          .insert({
-            user_id: userId,
-            is_organizer: false,
-            is_verified: false,
-            is_private: false
-          })
-          .select()
-          .single()
+      throw profileError
+    }
 
-        if (createError) {
-          throw createError
-        }
-
-        profile.set(newProfile)
-      }
-    } else {
+    if (data) {
+      // Profile exists
       profile.set(data)
+    } else {
+      // Profile doesn't exist, create one
+      console.log('Profile not found, creating new profile for user:', userId)
+      
+      const { data: newProfile, error: createError } = await supabase
+        .from('profiles')
+        .insert({
+          user_id: userId,
+          username: `user_${userId.substring(0, 8)}`,
+          is_organizer: false,
+          is_verified: false,
+          is_private: false
+        })
+        .select()
+        .single()
+
+      if (createError) {
+        console.error('Error creating profile:', createError)
+        throw createError
+      }
+
+      profile.set(newProfile)
     }
   } catch (err) {
     console.error('Load profile error:', err)

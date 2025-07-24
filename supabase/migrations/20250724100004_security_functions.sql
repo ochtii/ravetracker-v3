@@ -7,7 +7,7 @@
 -- =====================================================
 
 -- Function to promote user to organizer (admin only)
-CREATE OR REPLACE FUNCTION admin.promote_to_organizer(
+CREATE OR REPLACE FUNCTION promote_to_organizer(
     target_user_id UUID,
     admin_user_id UUID DEFAULT auth.uid()
 )
@@ -16,21 +16,19 @@ DECLARE
     success BOOLEAN := FALSE;
 BEGIN
     -- Check if requesting user is admin
-    IF NOT auth.is_admin(admin_user_id) THEN
+    IF NOT is_admin(admin_user_id) THEN
         RAISE EXCEPTION 'Access denied: Admin privileges required';
     END IF;
     
     -- Update user profile to organizer
-    UPDATE profiles 
-    SET 
+    UPDATE profiles
+    SET
         is_organizer = TRUE,
         updated_at = NOW()
     WHERE user_id = target_user_id;
-    
-    GET DIAGNOSTICS success = FOUND;
-    
-    -- Log the action
-    PERFORM auth.log_security_event(
+
+    success := FOUND;    -- Log the action
+    PERFORM log_security_event(
         'role_promotion',
         admin_user_id,
         'profile',
@@ -45,7 +43,7 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Function to verify organizer (admin only)
-CREATE OR REPLACE FUNCTION admin.verify_organizer(
+CREATE OR REPLACE FUNCTION verify_organizer(
     target_user_id UUID,
     admin_user_id UUID DEFAULT auth.uid()
 )
@@ -54,7 +52,7 @@ DECLARE
     success BOOLEAN := FALSE;
 BEGIN
     -- Check if requesting user is admin
-    IF NOT auth.is_admin(admin_user_id) THEN
+    IF NOT is_admin(admin_user_id) THEN
         RAISE EXCEPTION 'Access denied: Admin privileges required';
     END IF;
     
@@ -65,10 +63,10 @@ BEGIN
         updated_at = NOW()
     WHERE user_id = target_user_id AND is_organizer = TRUE;
     
-    GET DIAGNOSTICS success = FOUND;
+    success := FOUND;
     
     -- Log the action
-    PERFORM auth.log_security_event(
+    PERFORM log_security_event(
         'organizer_verification',
         admin_user_id,
         'profile',
@@ -83,7 +81,7 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Function to set user role (super admin only)
-CREATE OR REPLACE FUNCTION admin.set_user_role(
+CREATE OR REPLACE FUNCTION set_user_role(
     target_user_id UUID,
     new_role TEXT,
     admin_user_id UUID DEFAULT auth.uid()
@@ -120,10 +118,10 @@ BEGIN
         updated_at = NOW()
     WHERE user_id = target_user_id;
     
-    GET DIAGNOSTICS success = FOUND;
+    success := FOUND;
     
     -- Log the action
-    PERFORM auth.log_security_event(
+    PERFORM log_security_event(
         'role_change',
         admin_user_id,
         'profile',
@@ -142,7 +140,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- =====================================================
 
 -- Function to moderate event (admin/moderator only)
-CREATE OR REPLACE FUNCTION admin.moderate_event(
+CREATE OR REPLACE FUNCTION moderate_event(
     event_uuid UUID,
     action TEXT, -- 'approve', 'reject', 'feature', 'unfeature', 'hide'
     reason TEXT DEFAULT NULL,
@@ -203,10 +201,10 @@ BEGIN
             RAISE EXCEPTION 'Invalid moderation action: %', action;
     END CASE;
     
-    GET DIAGNOSTICS success = FOUND;
+    success := FOUND;
     
     -- Log the moderation action
-    PERFORM auth.log_security_event(
+    PERFORM log_security_event(
         'event_moderation',
         moderator_user_id,
         'event',
@@ -224,7 +222,7 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Function to moderate image (moderator only)
-CREATE OR REPLACE FUNCTION admin.moderate_image(
+CREATE OR REPLACE FUNCTION moderate_image(
     image_uuid UUID,
     approved BOOLEAN,
     reason TEXT DEFAULT NULL,
@@ -246,10 +244,10 @@ BEGIN
         updated_at = NOW()
     WHERE id = image_uuid;
     
-    GET DIAGNOSTICS success = FOUND;
+    success := FOUND;
     
     -- Log the moderation action
-    PERFORM auth.log_security_event(
+    PERFORM log_security_event(
         'image_moderation',
         moderator_user_id,
         'event_image',
@@ -268,7 +266,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- =====================================================
 
 -- Function to get user activity summary
-CREATE OR REPLACE FUNCTION admin.get_user_activity(
+CREATE OR REPLACE FUNCTION get_user_activity(
     target_user_id UUID,
     days_back INTEGER DEFAULT 30
 )
@@ -327,7 +325,7 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Function to get suspicious activity
-CREATE OR REPLACE FUNCTION admin.get_suspicious_activity(
+CREATE OR REPLACE FUNCTION get_suspicious_activity(
     hours_back INTEGER DEFAULT 24
 )
 RETURNS TABLE (
@@ -379,7 +377,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- =====================================================
 
 -- Function to check rate limits
-CREATE OR REPLACE FUNCTION auth.check_rate_limit(
+CREATE OR REPLACE FUNCTION check_rate_limit(
     user_uuid UUID,
     action_type TEXT,
     max_actions INTEGER,
@@ -426,7 +424,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- =====================================================
 
 -- Function to export user data
-CREATE OR REPLACE FUNCTION admin.export_user_data(target_user_id UUID)
+CREATE OR REPLACE FUNCTION export_user_data(target_user_id UUID)
 RETURNS JSONB AS $$
 DECLARE
     user_data JSONB;
@@ -466,7 +464,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- =====================================================
 
 -- Function to anonymize user data (GDPR right to be forgotten)
-CREATE OR REPLACE FUNCTION admin.anonymize_user_data(
+CREATE OR REPLACE FUNCTION anonymize_user_data(
     target_user_id UUID,
     admin_user_id UUID DEFAULT auth.uid()
 )
@@ -476,7 +474,7 @@ DECLARE
     profile_id UUID;
 BEGIN
     -- Check if requesting user is admin
-    IF NOT auth.is_admin(admin_user_id) THEN
+    IF NOT is_admin(admin_user_id) THEN
         RAISE EXCEPTION 'Access denied: Admin privileges required';
     END IF;
     
@@ -515,7 +513,7 @@ BEGIN
     success := TRUE;
     
     -- Log the action
-    PERFORM auth.log_security_event(
+    PERFORM log_security_event(
         'user_anonymization',
         admin_user_id,
         'profile',
@@ -537,7 +535,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 CREATE SCHEMA IF NOT EXISTS admin;
 
 -- Grant execute permissions to authenticated users for specific functions
-GRANT EXECUTE ON FUNCTION auth.check_rate_limit(UUID, TEXT, INTEGER, INTERVAL) TO authenticated;
+GRANT EXECUTE ON FUNCTION check_rate_limit(UUID, TEXT, INTEGER, INTERVAL) TO authenticated;
 
 -- Admin functions require explicit admin role check within the function
 GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA admin TO authenticated;

@@ -32,7 +32,7 @@ CREATE INDEX idx_security_audit_resource ON security_audit(resource_type, resour
 -- =====================================================
 
 -- Enhanced security logging function
-CREATE OR REPLACE FUNCTION auth.log_security_event(
+CREATE OR REPLACE FUNCTION log_security_event(
     event_type TEXT,
     user_uuid UUID,
     resource_type TEXT,
@@ -84,12 +84,12 @@ RETURNS TRIGGER AS $$
 BEGIN
     -- Prevent role escalation by non-admins
     IF OLD.social_links->>'role' IS DISTINCT FROM NEW.social_links->>'role' THEN
-        IF NOT auth.is_admin() THEN
+        IF NOT is_admin() THEN
             RAISE EXCEPTION 'Access denied: Cannot change role without admin privileges';
         END IF;
         
         -- Log role changes
-        PERFORM auth.log_security_event(
+        PERFORM log_security_event(
             'role_change_attempt',
             auth.uid(),
             'profile',
@@ -105,14 +105,14 @@ BEGIN
     
     -- Prevent organizer status changes by non-admins
     IF OLD.is_organizer IS DISTINCT FROM NEW.is_organizer THEN
-        IF NOT auth.is_admin() AND auth.uid() != NEW.user_id THEN
+        IF NOT is_admin() AND auth.uid() != NEW.user_id THEN
             RAISE EXCEPTION 'Access denied: Cannot change organizer status';
         END IF;
     END IF;
     
     -- Prevent verification status changes by non-admins
     IF OLD.is_verified IS DISTINCT FROM NEW.is_verified THEN
-        IF NOT auth.is_admin() THEN
+        IF NOT is_admin() THEN
             RAISE EXCEPTION 'Access denied: Cannot change verification status';
         END IF;
     END IF;
@@ -144,7 +144,7 @@ BEGIN
     
     -- Prevent non-organizers from creating events
     IF TG_OP = 'INSERT' THEN
-        IF NOT auth.is_verified_organizer(event_owner_id) AND NOT auth.is_admin() THEN
+        IF NOT auth.is_verified_organizer(event_owner_id) AND NOT is_admin() THEN
             RAISE EXCEPTION 'Access denied: Must be a verified organizer to create events';
         END IF;
         
@@ -162,7 +162,7 @@ BEGIN
         END IF;
         
         -- Log status changes
-        PERFORM auth.log_security_event(
+        PERFORM log_security_event(
             'event_status_change',
             auth.uid(),
             'event',
@@ -178,7 +178,7 @@ BEGIN
     
     -- Prevent organizer changes by non-admins
     IF TG_OP = 'UPDATE' AND OLD.organizer_id IS DISTINCT FROM NEW.organizer_id THEN
-        IF NOT auth.is_admin() THEN
+        IF NOT is_admin() THEN
             RAISE EXCEPTION 'Access denied: Cannot change event organizer';
         END IF;
     END IF;
@@ -207,7 +207,7 @@ BEGIN
     END IF;
     
     -- Ensure user can only manage their own attendance
-    IF NEW.user_id != auth.uid() AND NOT auth.is_admin() THEN
+    IF NEW.user_id != auth.uid() AND NOT is_admin() THEN
         RAISE EXCEPTION 'Access denied: Can only manage own attendance';
     END IF;
     
@@ -242,7 +242,7 @@ BEGIN
     END IF;
     
     -- Ensure user can upload to this event
-    IF NOT auth.is_event_organizer(NEW.event_id) AND NOT auth.is_admin() THEN
+    IF NOT auth.is_event_organizer(NEW.event_id) AND NOT is_admin() THEN
         RAISE EXCEPTION 'Access denied: Can only upload images to own events';
     END IF;
     
@@ -279,7 +279,7 @@ RETURNS TRIGGER AS $$
 BEGIN
     -- Only allow system, organizers, or admins to create notifications
     IF TG_OP = 'INSERT' THEN
-        IF auth.role() != 'service_role' AND NOT auth.is_admin() THEN
+        IF auth.role() != 'service_role' AND NOT is_admin() THEN
             -- Check if it's an event notification from the organizer
             IF NEW.event_id IS NOT NULL THEN
                 IF NOT auth.is_event_organizer(NEW.event_id) THEN
@@ -457,7 +457,7 @@ ALTER TABLE security_audit ENABLE ROW LEVEL SECURITY;
 
 -- Admins can view all audit logs
 CREATE POLICY "Admins can view all audit logs" ON security_audit
-    FOR SELECT USING (auth.is_admin());
+    FOR SELECT USING (is_admin());
 
 -- Users can view their own audit logs
 CREATE POLICY "Users can view own audit logs" ON security_audit

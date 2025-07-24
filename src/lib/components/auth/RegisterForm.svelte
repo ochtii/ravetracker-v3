@@ -61,9 +61,11 @@
         ...(formData.username && { username: formData.username })
       })
       
-      if (result) {
-        errors.success = 'Registrierung erfolgreich! Bitte überprüfe deine E-Mails zur Bestätigung.'
-        // dispatch('success', { user: result })
+      if (result.data) {
+        // Registration successful - email confirmation required
+        dispatch('success', { user: result.data.user })
+      } else if (result.error) {
+        errors.general = result.error.message || 'Registrierung fehlgeschlagen'
       }
     } catch (error) {
       console.error('Registration error:', error)
@@ -395,18 +397,5 @@
     </div>
   {/if}
 
-  <!-- Login Link -->
-  <div class="mt-6 text-center">
-    <div class="text-sm text-white/70">
-      Bereits registriert?
-      <button
-        type="button"
-        class="text-primary-400 hover:text-primary-300 transition-colors font-medium"
-        on:click={() => dispatch('switch', { mode: 'login' })}
-        disabled={loading}
-      >
-        Jetzt anmelden
-      </button>
-    </div>
-  </div>
+ 
 </Card>
