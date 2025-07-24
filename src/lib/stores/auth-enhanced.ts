@@ -127,9 +127,6 @@ export const isAdmin = derived(
 export const hasAdminAccess = derived(profile, ($profile) => $profile?.role === 'admin')
 export const hasOrganizerAccess = derived(profile, ($profile) => $profile?.role === 'admin' || $profile?.is_organizer || $profile?.role === 'organizer')
 
-// User role derived store
-export const userRole = derived(profile, ($profile) => $profile?.role || 'user')
-
 // Auth operations
 export const auth: AuthOperations = {
 	async signIn(email: string, password: string) {

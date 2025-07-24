@@ -8,7 +8,7 @@ Main admin dashboard with overview statistics and quick actions
 	import { onMount } from 'svelte'
 	import { goto } from '$app/navigation'
 	import { user, isAdmin } from '$lib/stores/auth-enhanced'
-	import { db } from '$lib/utils/database'
+	import { supabase } from '$lib/utils/supabase'
 	import LoadingSpinner from '$lib/components/ui/LoadingSpinner.svelte'
 	import ErrorDisplay from '$lib/components/ui/ErrorDisplay.svelte'
 	import { 
@@ -93,16 +93,16 @@ Main admin dashboard with overview statistics and quick actions
 
 	async function loadStats() {
 		// Get total users
-		const { data: usersData, error: usersError } = await db.supabase
+		const { data: usersData, error: usersError } = await supabase
 			.from('profiles')
 			.select('id, created_at')
 
 		if (usersError) throw usersError
 
 		// Get total events
-		const { data: eventsData, error: eventsError } = await db.supabase
+		const { data: eventsData, error: eventsError } = await supabase
 			.from('events')
-			.select('id, status, created_at, date')
+			.select('id, status, created_at, start_date')
 
 		if (eventsError) throw eventsError
 
@@ -114,7 +114,7 @@ Main admin dashboard with overview statistics and quick actions
 		stats.totalUsers = usersData?.length || 0
 		stats.totalEvents = eventsData?.length || 0
 		stats.pendingEvents = eventsData?.filter(e => e.status === 'draft').length || 0
-		stats.activeEvents = eventsData?.filter(e => e.status === 'published' && new Date(e.date) > now).length || 0
+		stats.activeEvents = eventsData?.filter(e => e.status === 'published' && new Date(e.date_time) > now).length || 0
 		
 		stats.todayRegistrations = usersData?.filter(u => 
 			new Date(u.created_at) >= today
@@ -145,13 +145,13 @@ Main admin dashboard with overview statistics and quick actions
 	async function loadRecentActivity() {
 		// This would typically come from an activity log table
 		// For now, we'll simulate recent activity
-		const { data: recentUsers } = await db.supabase
+		const { data: recentUsers } = await supabase
 			.from('profiles')
 			.select('id, display_name, email, created_at')
 			.order('created_at', { ascending: false })
 			.limit(5)
 
-		const { data: recentEvents } = await db.supabase
+		const { data: recentEvents } = await supabase
 			.from('events')
 			.select('id, title, status, created_at, organizer_id')
 			.order('created_at', { ascending: false })
@@ -188,14 +188,14 @@ Main admin dashboard with overview statistics and quick actions
 	}
 
 	async function loadPendingEvents() {
-		const { data, error } = await db.supabase
+		const { data, error } = await supabase
 			.from('events')
 			.select(`
 				id,
 				title,
 				description,
-				date,
-				location,
+				date_time,
+				location_name,
 				created_at,
 				organizer:organizer_id (
 					id,
@@ -213,7 +213,7 @@ Main admin dashboard with overview statistics and quick actions
 
 	async function approveEvent(eventId: string) {
 		try {
-			const { error } = await db.supabase
+			const { error } = await supabase
 				.from('events')
 				.update({ 
 					status: 'published',
@@ -232,7 +232,7 @@ Main admin dashboard with overview statistics and quick actions
 
 	async function rejectEvent(eventId: string) {
 		try {
-			const { error } = await db.supabase
+			const { error } = await supabase
 				.from('events')
 				.update({ 
 					status: 'cancelled'

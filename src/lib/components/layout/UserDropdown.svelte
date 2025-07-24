@@ -1,19 +1,26 @@
 <script lang="ts">
-	import { onMount, createEventDispatcher } from 'svelte';
+	import { onMount } from 'svelte';
 	import { fly, fade } from 'svelte/transition';
 	import { quintOut } from 'svelte/easing';
 	import { goto } from '$app/navigation';
-	import { authActions } from '$lib/stores/auth';
+	import { authActions } from '$lib/stores/auth-enhanced';
+	import { userRole, isAdmin } from '$lib/stores/auth-enhanced';
 	
 	export let user: any;
-	
-	const dispatch = createEventDispatcher();
 	
 	let dropdownOpen = false;
 	let dropdownElement: HTMLElement;
 	
 	$: userInitials = getUserInitials(user);
-	$: userRole = user?.user_metadata?.role || 'user';
+	$: displayRole = getRoleDisplayName($userRole);
+	
+	function getRoleDisplayName(role: string): string {
+		switch (role) {
+			case 'admin': return 'Admin';
+			case 'organizer': return 'Organizer';
+			default: return 'User';
+		}
+	}
 	
 	function getUserInitials(user: any): string {
 		if (!user) return 'U';
@@ -94,7 +101,7 @@
 		}
 	];
 	
-	$: adminItems = userRole === 'organizer' ? [
+	$: adminItems = $isAdmin ? [
 		{
 			label: 'Admin Panel',
 			href: '/admin',
@@ -116,7 +123,7 @@
 				{userInitials}
 			</div>
 			<!-- Online Status Indicator -->
-			<div class="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-400 rounded-full border-2 border-gray-900" />
+			<div class="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-400 rounded-full border-2 border-gray-900"></div>
 		</div>
 		
 		<!-- User Info (Desktop) -->
@@ -124,7 +131,7 @@
 			<p class="text-sm font-medium text-white">
 				{user?.user_metadata?.full_name || user?.user_metadata?.name || 'User'}
 			</p>
-			<p class="text-xs text-gray-400 capitalize">{userRole}</p>
+			<p class="text-xs text-gray-400 capitalize">{displayRole}</p>
 		</div>
 		
 		<!-- Dropdown Arrow -->
@@ -157,8 +164,8 @@
 						</p>
 						<p class="text-xs text-gray-400">{user?.email}</p>
 						<div class="flex items-center space-x-1 mt-1">
-							<span class="inline-block w-2 h-2 bg-green-400 rounded-full" />
-							<span class="text-xs text-gray-400 capitalize">{userRole}</span>
+							<span class="inline-block w-2 h-2 bg-green-400 rounded-full"></span>
+							<span class="text-xs text-gray-400 capitalize">{displayRole}</span>
 						</div>
 					</div>
 				</div>
@@ -216,22 +223,47 @@
 
 <style>
 	.dropdown-item {
-		@apply flex items-center space-x-3 px-4 py-3 text-sm text-gray-300 hover:text-white hover:bg-white/10 transition-all duration-200;
+		display: flex;
+		align-items: center;
+		padding: 0.75rem 1rem;
+		font-size: 0.875rem;
+		color: rgb(209 213 219);
+		text-decoration: none;
+		transition: all 0.2s;
+	}
+	
+	.dropdown-item svg {
+		margin-right: 0.75rem;
+	}
+	
+	.dropdown-item:hover {
+		color: white;
+		background-color: rgba(255, 255, 255, 0.1);
 	}
 	
 	.dropdown-item:hover svg {
-		@apply transform scale-110;
+		transform: scale(1.1);
 	}
 	
 	.dropdown-item.admin {
-		@apply relative;
+		position: relative;
 	}
 	
 	.dropdown-item.logout {
-		@apply text-red-400 hover:text-red-300 hover:bg-red-500/10;
+		color: rgb(248 113 113);
+	}
+	
+	.dropdown-item.logout:hover {
+		color: rgb(252 165 165);
+		background-color: rgba(239 68 68, 0.1);
 	}
 	
 	.admin-badge {
-		@apply ml-auto px-2 py-1 text-xs bg-gradient-to-r from-purple-600 to-cyan-600 text-white rounded-full;
+		margin-left: auto;
+		padding: 0.25rem 0.5rem;
+		font-size: 0.75rem;
+		background: linear-gradient(to right, rgb(147 51 234), rgb(8 145 178));
+		color: white;
+		border-radius: 9999px;
 	}
 </style>

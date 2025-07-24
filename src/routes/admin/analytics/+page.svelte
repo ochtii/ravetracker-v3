@@ -8,7 +8,7 @@ Comprehensive analytics and insights for administrators
 	import { onMount } from 'svelte'
 	import { page } from '$app/stores'
 	import { isAdmin, isOrganizer } from '$lib/stores/auth-enhanced'
-	import { db } from '$lib/utils/database'
+	import { supabase } from '$lib/utils/supabase'
 	import LoadingSpinner from '$lib/components/ui/LoadingSpinner.svelte'
 	import ErrorDisplay from '$lib/components/ui/ErrorDisplay.svelte'
 	import { 
@@ -133,36 +133,36 @@ Comprehensive analytics and insights for administrators
 				{ data: previousAttendance }
 			] = await Promise.all([
 				// Total users
-				db.supabase.from('profiles').select('id', { count: 'exact', head: true }),
+				supabase.from('profiles').select('id', { count: 'exact', head: true }),
 				
 				// Total events
-				db.supabase.from('events').select('id', { count: 'exact', head: true }),
+				supabase.from('events').select('id', { count: 'exact', head: true }),
 				
 				// Total attendance
-				db.supabase.from('event_attendance').select('id', { count: 'exact', head: true }),
+				supabase.from('event_attendance').select('id', { count: 'exact', head: true }),
 				
 				// Active users in period
-				db.supabase
+				supabase
 					.from('profiles')
 					.select('id', { count: 'exact', head: true })
 					.gte('last_sign_in_at', startDate.toISOString()),
 				
 				// Previous period users for growth calculation
-				db.supabase
+				supabase
 					.from('profiles')
 					.select('id', { count: 'exact', head: true })
 					.gte('created_at', previousStartDate.toISOString())
 					.lt('created_at', startDate.toISOString()),
 				
 				// Previous period events
-				db.supabase
+				supabase
 					.from('events')
 					.select('id', { count: 'exact', head: true })
 					.gte('created_at', previousStartDate.toISOString())
 					.lt('created_at', startDate.toISOString()),
 				
 				// Previous period attendance
-				db.supabase
+				supabase
 					.from('event_attendance')
 					.select('id', { count: 'exact', head: true })
 					.gte('created_at', previousStartDate.toISOString())
@@ -180,7 +180,7 @@ Comprehensive analytics and insights for administrators
 				{ data: dailyActive }
 			] = await Promise.all([
 				// Daily signups
-				db.supabase
+				supabase
 					.from('profiles')
 					.select('created_at')
 					.gte('created_at', startDate.toISOString())
@@ -188,12 +188,12 @@ Comprehensive analytics and insights for administrators
 					.order('created_at'),
 				
 				// Users by role
-				db.supabase
+				supabase
 					.from('profiles')
 					.select('role'),
 				
 				// Events by date
-				db.supabase
+				supabase
 					.from('events')
 					.select('created_at, date_time')
 					.gte('created_at', startDate.toISOString())
@@ -201,28 +201,28 @@ Comprehensive analytics and insights for administrators
 					.order('created_at'),
 				
 				// Events by location
-				db.supabase
+				supabase
 					.from('events')
 					.select('location_city')
 					.gte('created_at', startDate.toISOString())
 					.lte('created_at', endDate.toISOString()),
 				
 				// User locations (from events they've attended)
-				db.supabase
+				supabase
 					.from('event_attendance')
 					.select('events(location_city)')
 					.gte('created_at', startDate.toISOString())
 					.lte('created_at', endDate.toISOString()),
 				
 				// Popular venues
-				db.supabase
+				supabase
 					.from('events')
 					.select('venue')
 					.gte('created_at', startDate.toISOString())
 					.lte('created_at', endDate.toISOString()),
 				
 				// Daily active users (approximated by event interactions)
-				db.supabase
+				supabase
 					.from('event_attendance')
 					.select('created_at, user_id')
 					.gte('created_at', startDate.toISOString())

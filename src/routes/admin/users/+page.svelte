@@ -8,7 +8,7 @@ Admin interface for managing users, roles, and permissions
 	import { onMount } from 'svelte'
 	import { page } from '$app/stores'
 	import { isAdmin } from '$lib/stores/auth-enhanced'
-	import { db } from '$lib/utils/database'
+	import { supabase } from '$lib/utils/supabase'
 	import LoadingSpinner from '$lib/components/ui/LoadingSpinner.svelte'
 	import ErrorDisplay from '$lib/components/ui/ErrorDisplay.svelte'
 	import { 
@@ -94,7 +94,7 @@ Admin interface for managing users, roles, and permissions
 			error = null
 
 			// Load user profiles with additional stats
-			const { data: profilesData, error: profilesError } = await db.supabase
+			const { data: profilesData, error: profilesError } = await supabase
 				.from('profiles')
 				.select(`
 					id,
@@ -103,8 +103,7 @@ Admin interface for managing users, roles, and permissions
 					role,
 					status,
 					created_at,
-					last_sign_in_at,
-					email_confirmed_at
+					updated_at
 				`)
 				.order('created_at', { ascending: false })
 
@@ -113,12 +112,12 @@ Admin interface for managing users, roles, and permissions
 			// Get event statistics for each user
 			const userIds = profilesData?.map(u => u.id) || []
 			
-			const { data: eventStats, error: eventStatsError } = await db.supabase
+			const { data: eventStats } = await supabase
 				.from('events')
 				.select('organizer_id')
 				.in('organizer_id', userIds)
 
-			const { data: attendanceStats, error: attendanceStatsError } = await db.supabase
+			const { data: attendanceStats } = await supabase
 				.from('event_attendance')
 				.select('user_id')
 				.in('user_id', userIds)
@@ -156,7 +155,7 @@ Admin interface for managing users, roles, and permissions
 
 	async function updateUserRole(userId: string, newRole: 'admin' | 'organizer' | 'user') {
 		try {
-			const { error } = await db.supabase
+			const { error } = await supabase
 				.from('profiles')
 				.update({ role: newRole })
 				.eq('id', userId)
@@ -176,7 +175,7 @@ Admin interface for managing users, roles, and permissions
 
 	async function updateUserStatus(userId: string, newStatus: 'active' | 'suspended' | 'banned') {
 		try {
-			const { error } = await db.supabase
+			const { error } = await supabase
 				.from('profiles')
 				.update({ status: newStatus })
 				.eq('id', userId)
@@ -229,7 +228,7 @@ Admin interface for managing users, roles, and permissions
 		try {
 			const userIds = Array.from(selectedUsers)
 			
-			const { error } = await db.supabase
+			const { error } = await supabase
 				.from('profiles')
 				.update({ role })
 				.in('id', userIds)
@@ -253,7 +252,7 @@ Admin interface for managing users, roles, and permissions
 		try {
 			const userIds = Array.from(selectedUsers)
 			
-			const { error } = await db.supabase
+			const { error } = await supabase
 				.from('profiles')
 				.update({ status })
 				.in('id', userIds)

@@ -131,7 +131,7 @@ Admin interface for moderating events, reviewing submissions, and managing conte
 			error = null
 
 			// Load events with organizer and report data
-			const { data: eventsData, error: eventsError } = await db.supabase
+			const { data: eventsData, error: eventsError } = await supabase
 				.from('events')
 				.select(`
 					*,
@@ -147,7 +147,7 @@ Admin interface for moderating events, reviewing submissions, and managing conte
 			// Load event reports
 			const eventIds = eventsData?.map(e => e.id) || []
 			
-			const { data: reportsData, error: reportsError } = await db.supabase
+			const { data: reportsData, error: reportsError } = await supabase
 				.from('event_reports')
 				.select(`
 					*,
@@ -159,7 +159,7 @@ Admin interface for moderating events, reviewing submissions, and managing conte
 				.in('event_id', eventIds)
 
 			// Load attendance counts
-			const { data: attendanceData, error: attendanceError } = await db.supabase
+			const { data: attendanceData, error: attendanceError } = await supabase
 				.from('event_attendance')
 				.select('event_id')
 				.in('event_id', eventIds)
@@ -223,7 +223,7 @@ Admin interface for moderating events, reviewing submissions, and managing conte
 				updates.status = 'rejected'
 			}
 
-			const { error } = await db.supabase
+			const { error } = await supabase
 				.from('events')
 				.update(updates)
 				.eq('id', eventId)
@@ -260,7 +260,7 @@ Admin interface for moderating events, reviewing submissions, and managing conte
 				updates.status = 'rejected'
 			}
 
-			const { error } = await db.supabase
+			const { error } = await supabase
 				.from('events')
 				.update(updates)
 				.in('id', eventIds)
@@ -290,7 +290,7 @@ Admin interface for moderating events, reviewing submissions, and managing conte
 		}
 
 		try {
-			const { error } = await db.supabase
+			const { error } = await supabase
 				.from('events')
 				.delete()
 				.eq('id', eventId)

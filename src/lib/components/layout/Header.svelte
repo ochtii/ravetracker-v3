@@ -91,7 +91,7 @@
 			</div>
 
 			<!-- Desktop Navigation -->
-			<div class="hidden lg:block">
+			<div class="hidden lg:block ml-12">
 				<Navigation />
 			</div>
 
@@ -101,7 +101,7 @@
 			</div>
 
 			<!-- Right Side Actions -->
-			<div class="flex items-center space-x-4">
+			<div class="flex items-center space-x-6">
 				<!-- Search Toggle (Mobile) -->
 				<button
 					on:click={toggleSearch}

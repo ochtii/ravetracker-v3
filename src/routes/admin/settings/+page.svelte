@@ -145,7 +145,7 @@ System-wide settings and configuration management
 			}
 
 			// Try to load from database
-			const { data: settingsData, error: settingsError } = await db.supabase
+			const { data: settingsData, error: settingsError } = await supabase
 				.from('system_settings')
 				.select('*')
 				.single()
@@ -173,13 +173,13 @@ System-wide settings and configuration management
 			error = null
 
 			// Save to database
-			const { error: saveError } = await db.supabase
+			const { error: saveError } = await supabase
 				.from('system_settings')
 				.upsert({
 					id: 1, // Single settings record
 					settings: settings,
 					updated_at: new Date().toISOString(),
-					updated_by: db.supabase.auth.getUser().then(u => u.data.user?.id)
+					updated_by: supabase.auth.getUser().then(u => u.data.user?.id)
 				})
 
 			if (saveError) throw saveError
