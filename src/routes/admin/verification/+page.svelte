@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
-  import { Button, Card, Alert, Input, Textarea } from '$lib/components/ui';
+  import { Button, Card, Alert, Input, Textarea } from '$lib/ui';
   import { VerificationBadge } from '$lib/components';
   import type { PageData } from './$types';
 

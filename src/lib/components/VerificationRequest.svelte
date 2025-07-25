@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
-  import { Button, Input, Textarea, Alert, Card } from '$lib/components/ui';
+  import { Button, Input, Textarea, Alert, Card } from '$lib/ui';
   import type { PageData } from '../../routes/verify/$types';
 
   export let data: PageData;

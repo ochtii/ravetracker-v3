@@ -319,7 +319,22 @@
 			</div>
 		</div>
 	</section>
+<script lang="ts">
+  import { goto } from '$app/navigation'
+  import { onMount } from 'svelte'
 
+  // Automatische Weiterleitung zur Willkommensseite
+  onMount(() => {
+    goto('/welcome')
+  })
+</script>
+
+<div class="flex items-center justify-center min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900">
+  <div class="text-center text-white">
+    <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500 mb-4"></div>
+    <p>Leite weiter...</p>
+  </div>
+</div>
 	<!-- CTA Section -->
 	{#if !user}
 		<section class="py-20 relative overflow-hidden">

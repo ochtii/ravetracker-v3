@@ -79,7 +79,13 @@ export const activeSubscriptions = derived(connectionStatus, $status =>
 	Array.from($status.subscriptions.values())
 )
 
-export const unacknowledgedUpdates = derived(liveUpdates, $updates => 
+// Additional derived stores for RealtimeSettings component
+export const realtimeEnabled = derived(realtimeState, $state => $state.enabled)
+export const autoRefresh = writable(true)
+export const refreshInterval = writable(5000) // 5 seconds
+export const maxConnections = writable(10)
+
+export const unacknowledgedUpdates = derived(liveUpdates, $updates =>
 	$updates.filter(update => !update.acknowledged)
 )
 

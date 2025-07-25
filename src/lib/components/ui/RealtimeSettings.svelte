@@ -5,42 +5,29 @@ Configure real-time features and notification preferences
 -->
 
 <script lang="ts">
-	import { onMount } from 'svelte'
-	import { 
-		realtimeState, 
-		realtimeActions,
-		notificationPermission,
-		isConnected,
-		connectionStatus,
-		activeSubscriptions
-	} from '$lib/stores/realtime'
-	import { 
-		Settings, 
-		Bell, 
-		Wifi, 
-		Volume2, 
-		Vibrate, 
-		RefreshCw,
-		ToggleLeft,
-		ToggleRight,
-		AlertCircle,
-		CheckCircle,
-		Info
-	} from 'lucide-svelte'
+  import { Card, Button, Switch } from '$lib/ui'
+  import {
+    realtimeEnabled,
+    autoRefresh,
+    refreshInterval,
+    maxConnections,
+    notificationPermission,
+    isConnected,
+    activeSubscriptions
+  } from '$lib/stores/realtime'
 
 	// Local state
 	let showAdvanced = false
 
 	// Reactive statements
-	$: state = $realtimeState
+	$: enabled = $realtimeEnabled
 	$: permission = $notificationPermission
 	$: connected = $isConnected
-	$: status = $connectionStatus
 	$: subscriptions = $activeSubscriptions
 
 	// Functions
 	async function toggleRealtime() {
-		if (state.enabled) {
+		if (enabled) {
 			await realtimeActions.disableRealtime()
 		} else {
 			await realtimeActions.enableRealtime()
@@ -111,18 +98,18 @@ Configure real-time features and notification preferences
 			<button
 				on:click={toggleRealtime}
 				class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
-				class:bg-purple-600={state.enabled}
-				class:bg-gray-200={!state.enabled}
+				class:bg-purple-600={enabled}
+				class:bg-gray-200={!enabled}
 			>
 				<span
 					class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform"
-					class:translate-x-6={state.enabled}
-					class:translate-x-1={!state.enabled}
+					class:translate-x-6={enabled}
+					class:translate-x-1={!enabled}
 				></span>
 			</button>
 		</div>
 
-		{#if state.enabled}
+		{#if enabled}
 			<!-- Feature Toggles -->
 			<div class="space-y-4">
 				<h4 class="text-sm font-medium text-gray-900">Real-time Features</h4>

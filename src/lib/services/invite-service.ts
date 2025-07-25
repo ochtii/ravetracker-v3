@@ -425,7 +425,7 @@ export class InviteService {
       const sanitizedCode = sanitizeInviteCode(code)
       
       // Log validation attempt
-      await this.logValidationAttempt(sanitizedCode, ip, null, false)
+      // await this.logValidationAttempt(sanitizedCode, ip, null, false)
 
       // Get invite from database
       const { data, error }: any = await (supabase as any)
@@ -499,7 +499,7 @@ export class InviteService {
       }
 
       // Log successful validation
-      await this.logValidationAttempt(sanitizedCode, ip, null, true)
+      // await this.logValidationAttempt(sanitizedCode, ip, null, true)
 
       timer.end()
 

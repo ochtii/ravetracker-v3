@@ -13,6 +13,11 @@ const config = {
 		// See https://svelte.dev/docs/kit/adapters for more information about adapters.
 		adapter: adapter(),
 		
+		// ServiceWorker deaktivieren um Fehler zu vermeiden
+		serviceWorker: {
+			register: false
+		},
+
 		// Path aliases
 		alias: {
 			$components: 'src/lib/components',

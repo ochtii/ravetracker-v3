@@ -1,0 +1,176 @@
+// SOFORTIGER FIX für invite-service.ts
+// Ersetze die validateCode-Funktion ab Zeile ~420 mit dieser Version:
+
+async validateCode(code: string, ip: string): Promise<ValidationResult> {
+  const timer = new PerformanceTimer('validateCode')
+
+  try {
+    // Sanitize and validate code format
+    const sanitizedCode = sanitizeInviteCode(code)
+
+    // Log validation attempt - TEMPORÄR DEAKTIVIERT wegen 400-Fehler
+    // await this.logValidationAttempt(sanitizedCode, ip, null, false)
+
+    // Get invite from database - KORRIGIERTE ABFRAGE
+    const { data, error } = await supabase
+      .from('invites')
+      .select(`
+        id,
+        code,
+        created_by,
+        used_by,
+        created_at,
+        used_at,
+        expires_at,
+        is_active,
+        is_action_code,
+        max_uses,
+        current_uses,
+        profiles!invites_created_by_fkey(username, verification_level)
+      `)
+      .eq('code', sanitizedCode)
+      .eq('is_active', true)
+      .limit(1)
+      .single()
+
+    if (error) {
+      timer.end()
+
+      // Spezifische Behandlung für "not found" vs. andere Errors
+      if (error.code === 'PGRST116') {
+        // Code nicht gefunden
+        logWarning('Invalid invite code attempted', { code: sanitizedCode.substring(0, 3) + '***', ip })
+
+        return {
+          isValid: false,
+          errorCode: 'INVALID_CODE',
+          errorMessage: 'Der eingegebene Invite-Code ist ungültig.',
+          invite: null,
+          inviterInfo: null
+        }
+      } else {
+        // Anderer Datenbankfehler
+        logError(createInviteError.databaseError(error, 'validateCode - database query'))
+
+        return {
+          isValid: false,
+          errorCode: 'DATABASE_ERROR',
+          errorMessage: 'Ein Datenbankfehler ist aufgetreten. Bitte versuche es erneut.',
+          invite: null,
+          inviterInfo: null
+        }
+      }
+    }
+
+    if (!data) {
+      timer.end()
+      logWarning('No data returned for invite code', { code: sanitizedCode.substring(0, 3) + '***', ip })
+
+      return {
+        isValid: false,
+        errorCode: 'INVALID_CODE',
+        errorMessage: 'Der eingegebene Invite-Code ist ungültig.',
+        invite: null,
+        inviterInfo: null
+      }
+    }
+
+    // Debug-Ausgabe für Vergleich
+    console.log('Code comparison:', {
+      input: sanitizedCode,
+      database: data.code,
+      match: sanitizedCode === data.code
+    })
+
+    // Rest der Validierungslogik bleibt gleich...
+    // Check if code is expired
+    const now = new Date()
+    const expiresAt = new Date(data.expires_at)
+
+    if (now > expiresAt) {
+      timer.end()
+      logWarning('Expired invite code attempted', { code: sanitizedCode.substring(0, 3) + '***', ip, expiresAt })
+
+      return {
+        isValid: false,
+        errorCode: 'CODE_EXPIRED',
+        errorMessage: 'Dieser Invite-Code ist abgelaufen.',
+        invite: null,
+        inviterInfo: null
+      }
+    }
+
+    // Check if code is exhausted
+    if (data.current_uses >= data.max_uses) {
+      timer.end()
+      logWarning('Exhausted invite code attempted', {
+        code: sanitizedCode.substring(0, 3) + '***',
+        ip,
+        uses: data.current_uses,
+        maxUses: data.max_uses
+      })
+
+      return {
+        isValid: false,
+        errorCode: 'CODE_EXHAUSTED',
+        errorMessage: 'Dieser Invite-Code wurde bereits verwendet.',
+        invite: null,
+        inviterInfo: null
+      }
+    }
+
+    // Log successful validation - TEMPORÄR DEAKTIVIERT wegen 400-Fehler
+    // await this.logValidationAttempt(sanitizedCode, ip, null, true)
+
+    timer.end()
+
+    const invite: Invite = {
+      id: data.id,
+      code: data.code,
+      created_by: data.created_by,
+      used_by: data.used_by,
+      created_at: new Date(data.created_at),
+      used_at: data.used_at ? new Date(data.used_at) : null,
+      expires_at: new Date(data.expires_at),
+      is_active: data.is_active,
+      is_action_code: data.is_action_code,
+      max_uses: data.max_uses,
+      current_uses: data.current_uses
+    }
+
+    const result: ValidationResult = {
+      isValid: true,
+      errorCode: null,
+      errorMessage: null,
+      invite,
+      inviterInfo: data.profiles ? {
+        username: data.profiles.username,
+        verificationLevel: data.profiles.verification_level
+      } : null
+    }
+
+    logInfo('Invite code validated successfully', {
+      code: sanitizedCode.substring(0, 3) + '***',
+      inviteId: invite.id,
+      createdBy: invite.created_by,
+      ip
+    })
+
+    return result
+
+  } catch (error) {
+    timer.end()
+    if (error instanceof InviteSystemError) {
+      throw error
+    }
+    logError(createInviteError.databaseError(error as Error, 'validateCode'))
+
+    return {
+      isValid: false,
+      errorCode: 'SYSTEM_ERROR',
+      errorMessage: 'Ein Systemfehler ist aufgetreten. Bitte versuche es später erneut.',
+      invite: null,
+      inviterInfo: null
+    }
+  }
+}
